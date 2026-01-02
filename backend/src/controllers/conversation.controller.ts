@@ -1,0 +1,625 @@
+import type { Context } from "hono";
+import { prisma } from "@/lib/prisma";
+import { Models } from "@/types/types";
+import { logger } from "@/utils/logger";
+import { config } from "@/config/config";
+import { redisClient } from "@/lib/redis";
+import { streamSSE } from "hono/streaming";
+import { createOpenRouterClient } from "@/lib/openrouter";
+import { userProfilePrompt } from "@/utils/userProfilePrompt";
+
+/**
+ * some tetx here
+ * @param c Hono Context
+ * @returns Json Respons with data
+ */
+
+export const getAllConversation = async (c: Context) => {
+  const requestId = c.get("requestId");
+  const ip = c.get("ip");
+
+  try {
+    const userId = c.get("user").id;
+
+    let user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        name: true,
+        isPremium: true,
+        profilePicture: true,
+      },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404
+      );
+    }
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        pinned: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
+
+    logger.info({
+      requestId: requestId,
+      ip: ip,
+      userId: userId,
+      message: "Data fetched successfully",
+    });
+
+    return c.json(
+      {
+        success: true,
+        message: "Data fetched successfully",
+        user: user,
+        conversations: conversations,
+      },
+      200
+    );
+  } catch (error) {
+    logger.error({ error }, "Error in getAllConversation controller");
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};
+
+export const getConversationById = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+    const conversationId = c.req.param("conversationId");
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404
+      );
+    }
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, userId },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found or does not belong to you",
+        },
+        403
+      );
+    }
+
+    logger.info({
+      ip,
+      requestId,
+      userId: userId,
+      userEmail: user.email,
+      conversationId: conversationId,
+      message: "Fetched conversation successfully",
+    });
+
+    return c.json(
+      {
+        success: true,
+        message: "Conversation fetched successfully",
+        data: conversation,
+      },
+      200
+    );
+  } catch (error) {
+    logger.error({ error }, "Error in getConversationById controller");
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};
+
+export const updateConversationPin = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404
+      );
+    }
+
+    const conversationId = c.req.param("conversationId");
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, userId },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found or does not belong to you",
+        },
+        403
+      );
+    }
+
+    const body = await c.req.json<{ pinned: boolean }>();
+
+    if (typeof body.pinned !== "boolean") {
+      return c.json(
+        {
+          success: false,
+          message: "Pinned value must be boolean",
+        },
+        400
+      );
+    }
+
+    const update = await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { pinned: body.pinned },
+    });
+
+    logger.info({
+      ip,
+      requestId,
+      userId: userId,
+      userEmail: user.email,
+      conversationId: conversationId,
+      message: `Conversation ${
+        body.pinned ? "pinned" : "unpinned"
+      } successfully`,
+    });
+
+    return c.json(
+      {
+        success: true,
+        message: `Conversation ${
+          body.pinned ? "pinned" : "unpinned"
+        } successfully`,
+        data: update,
+      },
+      200
+    );
+  } catch (error) {
+    logger.error({ error }, "Error in updateConversationPin controller");
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};
+
+export const updateConversation = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404
+      );
+    }
+
+    const conversationId = c.req.param("conversationId");
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, userId },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found or does not belong to you",
+        },
+        403
+      );
+    }
+
+    const body = await c.req.json<{ title: string }>();
+
+    if (!body.title || body.title.trim() === "") {
+      return c.json(
+        {
+          success: false,
+          message: "Title cannot be empty",
+        },
+        400
+      );
+    }
+
+    const updatedConversation = await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { title: body.title.trim() },
+    });
+
+    logger.info({
+      ip,
+      requestId,
+      userId: userId,
+      userEmail: user.email,
+      conversationId: conversationId,
+      message: `Conversation title updated successfully"`,
+    });
+
+    return c.json(
+      {
+        success: true,
+        message: "Conversation title updated successfully",
+        data: updatedConversation,
+      },
+      200
+    );
+  } catch (error) {
+    logger.error({ error }, "Error in updateConversation controller");
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};
+
+export const deleteConversation = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404
+      );
+    }
+
+    const conversationId = c.req.param("conversationId");
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        userId,
+      },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found or does not belong to you",
+        },
+        403
+      );
+    }
+
+    await prisma.conversation.delete({
+      where: {
+        id: conversationId,
+      },
+    });
+
+    logger.info({
+      ip,
+      requestId,
+      userId: userId,
+      userEmail: user.email,
+      message: "conversation deleted successfully",
+    });
+
+    return c.json(
+      {
+        success: true,
+        message: "conversation deleted successfully",
+      },
+      200
+    );
+  } catch (error) {
+    logger.error({ error }, "Error in deleteConversation controller");
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};
+
+export const conversationChatController = async (c: Context) => {
+  let id = 0;
+
+  try {
+    const body = await c.req.json<{
+      conversationId?: string;
+      prompt: string;
+      model: string;
+    }>();
+
+    const { conversationId, prompt, model: modelId } = body;
+
+    const model = Models.find((m) => m.id === modelId);
+
+    if (!model) {
+      return c.json(
+        {
+          success: false,
+          message: "Model is not supported",
+        },
+        400
+      );
+    }
+
+    const userId = c.get("user").id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { openRouterApiKey: true },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404
+      );
+    }
+
+    let apiKeyToUse = config.OPENROUTER_API_KEY;
+    let billingMode: "BYOK" | "PREMIUM" | "CREDITS" = "CREDITS";
+
+    if (user.byokEnable && user.openRouterApiKey?.key) {
+      apiKeyToUse = user.openRouterApiKey.key;
+      billingMode = "BYOK";
+    } else if (user.isPremium) {
+      apiKeyToUse = config.OPENROUTER_API_KEY;
+      billingMode = "PREMIUM";
+    } else {
+      if (user.credits <= 0) {
+        return c.json(
+          {
+            success: false,
+            message: "You are out of credits, upgrade to premium",
+          },
+          402
+        );
+      }
+      billingMode = "CREDITS";
+    }
+
+    let finalConversationId: string;
+
+    if (!conversationId) {
+      const newConv = await prisma.conversation.create({
+        data: {
+          userId,
+          title: prompt.slice(0, 20) + "...",
+        },
+      });
+      finalConversationId = newConv.id;
+    } else {
+      finalConversationId = conversationId;
+    }
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: finalConversationId },
+    });
+
+    if (!conversation || conversation.userId !== userId) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation does not exist or does not belong to you",
+        },
+        403
+      );
+    }
+
+    await prisma.message.create({
+      data: {
+        conversationId: finalConversationId,
+        role: "user",
+        response: prompt,
+        modelName: model.name,
+      },
+    });
+
+    let profile = null;
+
+    const cached = await redisClient.get(`user:customization:${userId}`);
+
+    if (cached) {
+      profile = JSON.parse(cached);
+    } else {
+      profile = await prisma.systemCustomization.findFirst({
+        where: { userId },
+        select: {
+          systemName: true,
+          systemBio: true,
+          systemPrompt: true,
+          systemTrait: true,
+        },
+      });
+
+      if (profile) {
+        await redisClient.set(
+          `user:customization:${userId}`,
+          JSON.stringify(profile),
+          "EX",
+          3600
+        );
+      }
+    }
+
+    const systemPrompt = profile
+      ? userProfilePrompt(profile)
+      : "The user has not provided personal details. But call users as bro and be formal";
+
+    const openRouterClient = createOpenRouterClient(apiKeyToUse);
+
+    const aiStream = await openRouterClient.chat.send({
+      model: modelId,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      stream: true,
+      streamOptions: { includeUsage: true },
+    });
+
+    let fullResponse = "";
+    let totalTokens = 0;
+
+    return streamSSE(c, async (sse) => {
+      await sse.writeSSE({
+        event: "message_start",
+        data: "message_start",
+        id: String(id++),
+      });
+
+      for await (const chunk of aiStream) {
+        const content = chunk.choices?.[0]?.delta?.content;
+
+        if (content) {
+          fullResponse += content;
+
+          await sse.writeSSE({
+            event: "content_block_delta",
+            data: content,
+            id: String(id++),
+          });
+        }
+
+        if (chunk.usage) {
+          totalTokens += chunk.usage.totalTokens ?? 0;
+
+          await sse.writeSSE({
+            event: "usage",
+            data: JSON.stringify(chunk.usage),
+            id: String(id++),
+          });
+        }
+      }
+
+      await prisma.message.create({
+        data: {
+          conversationId: finalConversationId,
+          role: "ai",
+          response: fullResponse,
+          modelName: modelId,
+        },
+      });
+
+      if (billingMode === "CREDITS") {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            credits: {
+              decrement: 1,
+            },
+          },
+        });
+      }
+
+      await sse.writeSSE({
+        event: "message_stop",
+        data: "message_stop",
+        id: String(id++),
+      });
+    });
+  } catch (error) {
+    logger.error({ error }, "Error in conversationChatController controller");
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};

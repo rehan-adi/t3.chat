@@ -1,0 +1,25 @@
+interface CONFIG {
+  PORT: number;
+  NODE_ENV: string;
+  LOG_LEVEL: string;
+  REDIS_URL: string;
+  JWT_SECRET: string;
+  RESEND_API_KEY: string;
+  OPENROUTER_API_KEY: string;
+
+  AWS_REGION: string;
+  AWS_S3_BUCKET: string;
+}
+
+export const config: CONFIG = {
+  PORT: Number(Bun.env.PORT!),
+  NODE_ENV: Bun.env.NODE_ENV!,
+  LOG_LEVEL: Bun.env.LOG_LEVEL!,
+  REDIS_URL: Bun.env.REDIS_URL!,
+  JWT_SECRET: Bun.env.JWT_SECRET!,
+  RESEND_API_KEY: Bun.env.RESEND_API_KEY!,
+  OPENROUTER_API_KEY: Bun.env.OPENROUTER_API_KEY!,
+
+  AWS_REGION: Bun.env.AWS_REGION!,
+  AWS_S3_BUCKET: Bun.env.AWS_S3_BUCKET!,
+};
