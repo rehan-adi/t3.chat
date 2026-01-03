@@ -7,21 +7,22 @@ import { redisClient } from "@/lib/redis";
 import { streamSSE } from "hono/streaming";
 import { createOpenRouterClient } from "@/lib/openrouter";
 import { userProfilePrompt } from "@/utils/userProfilePrompt";
+import { updateConversationSchema } from "@/validations/conversation.validation";
 
 /**
- * some tetx here
+ * @desc getAllConversation fetch all conversations for the authenticated user along with basic profile info
  * @param c Hono Context
  * @returns Json Respons with data
  */
 
 export const getAllConversation = async (c: Context) => {
-  const requestId = c.get("requestId");
   const ip = c.get("ip");
+  const requestId = c.get("requestId");
 
   try {
     const userId = c.get("user").id;
 
-    let user = await prisma.user.findUnique({
+    const userWithConversation = await prisma.user.findUnique({
       where: {
         id: userId,
       },
@@ -30,10 +31,22 @@ export const getAllConversation = async (c: Context) => {
         name: true,
         isPremium: true,
         profilePicture: true,
+        conversation: {
+          select: {
+            id: true,
+            title: true,
+            pinned: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            updatedAt: "desc",
+          },
+        },
       },
     });
 
-    if (!user) {
+    if (!userWithConversation) {
       return c.json(
         {
           success: false,
@@ -43,34 +56,20 @@ export const getAllConversation = async (c: Context) => {
       );
     }
 
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        userId,
+    logger.info(
+      {
+        ip: ip,
+        requestId: requestId,
+        userId: userId,
       },
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        pinned: true,
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
-    });
-
-    logger.info({
-      requestId: requestId,
-      ip: ip,
-      userId: userId,
-      message: "Data fetched successfully",
-    });
+      "Data fetched successfully"
+    );
 
     return c.json(
       {
         success: true,
         message: "Data fetched successfully",
-        user: user,
-        conversations: conversations,
+        data: userWithConversation,
       },
       200
     );
@@ -86,6 +85,12 @@ export const getAllConversation = async (c: Context) => {
     );
   }
 };
+
+/**
+ * @desc getConversationById fetch a single conversation and its messages by conversationId
+ * @param c Hono Context
+ * @returns Json Respons with data
+ */ // (WORK NEED)
 
 export const getConversationById = async (c: Context) => {
   const ip = c.get("ip");
@@ -112,7 +117,10 @@ export const getConversationById = async (c: Context) => {
     }
 
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, userId },
+      where: {
+        id: conversationId,
+        userId,
+      },
       include: {
         messages: {
           orderBy: { createdAt: "asc" },
@@ -130,14 +138,16 @@ export const getConversationById = async (c: Context) => {
       );
     }
 
-    logger.info({
-      ip,
-      requestId,
-      userId: userId,
-      userEmail: user.email,
-      conversationId: conversationId,
-      message: "Fetched conversation successfully",
-    });
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+        userEmail: user.email,
+        conversationId: conversationId,
+      },
+      "Fetched conversation successfully"
+    );
 
     return c.json(
       {
@@ -159,6 +169,12 @@ export const getConversationById = async (c: Context) => {
     );
   }
 };
+
+/**
+ * @desc updateConversationPin pin and unpin the Conversation
+ * @param c Hono Context
+ * @returns Json Respons with data
+ */
 
 export const updateConversationPin = async (c: Context) => {
   const ip = c.get("ip");
@@ -214,16 +230,16 @@ export const updateConversationPin = async (c: Context) => {
       data: { pinned: body.pinned },
     });
 
-    logger.info({
-      ip,
-      requestId,
-      userId: userId,
-      userEmail: user.email,
-      conversationId: conversationId,
-      message: `Conversation ${
-        body.pinned ? "pinned" : "unpinned"
-      } successfully`,
-    });
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+        userEmail: user.email,
+        conversationId: conversationId,
+      },
+      `Conversation ${body.pinned ? "pinned" : "unpinned"} successfully`
+    );
 
     return c.json(
       {
@@ -247,6 +263,12 @@ export const updateConversationPin = async (c: Context) => {
     );
   }
 };
+
+/**
+ * @desc updateConversation updates Title of a conversation by conversationId.
+ * @param c Hono Context
+ * @returns Json Respons with data
+ */
 
 export const updateConversation = async (c: Context) => {
   const ip = c.get("ip");
@@ -287,29 +309,37 @@ export const updateConversation = async (c: Context) => {
 
     const body = await c.req.json<{ title: string }>();
 
-    if (!body.title || body.title.trim() === "") {
+    const { success, data, error } = updateConversationSchema.safeParse(body);
+
+    if (!success) {
       return c.json(
         {
           success: false,
-          message: "Title cannot be empty",
+          message: error.message,
         },
         400
       );
     }
 
     const updatedConversation = await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { title: body.title.trim() },
+      where: {
+        id: conversationId,
+      },
+      data: {
+        title: data?.title,
+      },
     });
 
-    logger.info({
-      ip,
-      requestId,
-      userId: userId,
-      userEmail: user.email,
-      conversationId: conversationId,
-      message: `Conversation title updated successfully"`,
-    });
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+        userEmail: user.email,
+        conversationId: conversationId,
+      },
+      "Conversation title updated successfully"
+    );
 
     return c.json(
       {
@@ -331,6 +361,12 @@ export const updateConversation = async (c: Context) => {
     );
   }
 };
+
+/**
+ * @desc deleteConversation delete users one conversation using conversationId.
+ * @param c Hono Context
+ * @returns Json Respons
+ */
 
 export const deleteConversation = async (c: Context) => {
   const ip = c.get("ip");
@@ -380,18 +416,20 @@ export const deleteConversation = async (c: Context) => {
       },
     });
 
-    logger.info({
-      ip,
-      requestId,
-      userId: userId,
-      userEmail: user.email,
-      message: "conversation deleted successfully",
-    });
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+        userEmail: user.email,
+      },
+      "Conversation deleted successfully"
+    );
 
     return c.json(
       {
         success: true,
-        message: "conversation deleted successfully",
+        message: "Conversation deleted successfully",
       },
       200
     );
