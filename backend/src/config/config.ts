@@ -9,6 +9,9 @@ interface CONFIG {
 
   AWS_REGION: string;
   AWS_S3_BUCKET: string;
+
+  CASHFREE_CLIENT_ID: string;
+  CASHFREE_CLIENT_SECRET: string;
 }
 
 export const config: CONFIG = {
@@ -22,4 +25,7 @@ export const config: CONFIG = {
 
   AWS_REGION: Bun.env.AWS_REGION!,
   AWS_S3_BUCKET: Bun.env.AWS_S3_BUCKET!,
+
+  CASHFREE_CLIENT_ID: Bun.env.CASHFREE_CLIENT_SECRET!,
+  CASHFREE_CLIENT_SECRET: Bun.env.CASHFREE_CLIENT_SECRET!,
 };
