@@ -22,8 +22,11 @@ model User {
   conversation               Conversation[]
   openRouterApiKey           OpenRouterApiKey?
   systemCustomizations       SystemCustomization?
+  paymentHistory             Payment[]
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
+
+  @@map("users")
 }
 
 model Conversation {
@@ -37,6 +40,7 @@ model Conversation {
   updatedAt DateTime  @updatedAt
 
   @@index([userId])
+  @@map("conversations")
 }
 
 model Message {
@@ -49,6 +53,7 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+  @@map("messages")
 }
 
 model SystemCustomization {
@@ -61,6 +66,8 @@ model SystemCustomization {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@map("system_customizations")
 }
 
 model OpenRouterApiKey {
@@ -70,6 +77,24 @@ model OpenRouterApiKey {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("open_router_api_key")
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  paymentId String?
+  amount    Int
+  currency  String
+  status    Status
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("payments")
 }
 
 enum Role {
@@ -80,9 +105,15 @@ enum Role {
 enum Trait {
   friendly
   witty
-  consise
+  concise
   empathetic
   creative
   patient
   curious
+}
+
+enum Status {
+  PENDING
+  SUCCESS
+  FAILED
 }
