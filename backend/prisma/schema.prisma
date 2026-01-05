@@ -114,6 +114,7 @@ enum Trait {
 
 enum Status {
   PENDING
+  INIT_ORDER_FAILED
   SUCCESS
   FAILED
 }

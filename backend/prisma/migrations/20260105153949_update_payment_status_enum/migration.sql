@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "Status" ADD VALUE 'INIT_ORDER_FAILED';
