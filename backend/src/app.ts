@@ -8,6 +8,7 @@ import { creditRoute } from "@/routes/credit.route";
 import { healthRoute } from "@/routes/health.route";
 import { settingRoute } from "@/routes/settings.route";
 import { generatePresignedUrl } from "./utils/presign";
+import { subscriptionRoute } from "@/routes/subscription.route";
 import { conversationRoute } from "@/routes/conversation.route";
 
 export const app = new Hono();
@@ -31,9 +32,10 @@ app.use(
 // );
 
 app.route("/api/v1/auth", authRoute);
-app.route("/api/v1/credit", creditRoute); 
+app.route("/api/v1/credit", creditRoute);
 app.route("/api/v1/health", healthRoute);
-app.route("/api/v1/settings", settingRoute); 
+app.route("/api/v1/settings", settingRoute);
+app.route("/api/v1/subscription", subscriptionRoute);
 app.route("/api/v1/conversations", conversationRoute);
 
 /**
