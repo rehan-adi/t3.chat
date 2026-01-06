@@ -82,16 +82,19 @@ model OpenRouterApiKey {
 }
 
 model Payment {
-  id        String   @id @default(uuid())
-  orderId   String   @unique
-  paymentId String?
-  amount    Int
-  currency  String
-  status    Status
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String    @id @default(uuid())
+  orderId           String    @unique
+  paymentId         String?
+  paymentSessionId  String?
+  paymentEventTime  DateTime?
+  amount            Int
+  currency          String
+  status            Status
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rawWebhookPayload Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([userId])
   @@map("payments")
