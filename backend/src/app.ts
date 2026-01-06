@@ -1,4 +1,5 @@
 import { cors } from "hono/cors";
+import { config } from "@/config/config";
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { requestLogger } from "@/middlewares/logger";
@@ -17,8 +18,8 @@ app.use(secureHeaders());
 app.use(requestLogger);
 app.use(
   cors({
-    origin: "http://localhost:3000",
-    allowHeaders: ["X-Custom-Header", "Upgrade-Insecure-Requests"],
+    origin: config.FRONTEND_ORIGIN,
+    allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["POST", "GET", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length", "X-Kuma-Revision"],
     maxAge: 600,
