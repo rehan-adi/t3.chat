@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { authorization } from "@/middlewares/authorization";
 import {
-  initiateSubscription,
   cashfreeWebHook,
+  initiateSubscription,
+  verifySubscriptionStatus,
 } from "@/controllers/subscription.controller";
 
 export const subscriptionRoute = new Hono();
@@ -12,4 +13,9 @@ subscriptionRoute.post(
   authorization,
   initiateSubscription
 );
-subscriptionRoute.post("/webhook", authorization, cashfreeWebHook);
+subscriptionRoute.post("/webhook", cashfreeWebHook);
+subscriptionRoute.get(
+  "/verify/:orderId",
+  authorization,
+  verifySubscriptionStatus
+);
