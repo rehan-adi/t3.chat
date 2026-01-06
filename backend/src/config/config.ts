@@ -14,6 +14,7 @@ interface CONFIG {
   CASHFREE_CLIENT_SECRET: string;
 
   FRONTEND_ORIGIN: string;
+  BACKEND_ORIGIN: string;
 }
 
 export const config: CONFIG = {
@@ -32,4 +33,5 @@ export const config: CONFIG = {
   CASHFREE_CLIENT_SECRET: Bun.env.CASHFREE_CLIENT_SECRET!,
 
   FRONTEND_ORIGIN: Bun.env.FRONTEND_ORIGIN!,
+  BACKEND_ORIGIN: Bun.env.BACKEND_ORIGIN!,
 };
