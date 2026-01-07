@@ -1,11 +1,13 @@
 # T3 Chat Clone
 
+## Backend Tech Stack
 
-## Tech Stack
 - Bun
 - Hono
 - TypeScript
 - Prisma
 - PostgreSQL
 - Redis
-- S3
+- AWS S3
+- OpenRouter
+- Cashfree Payment Gateway
