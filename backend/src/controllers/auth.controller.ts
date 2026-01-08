@@ -55,9 +55,9 @@ export const requestOtp = async (c: Context) => {
 
     let statusCode: ContentfulStatusCode = 200;
 
-    const randomId = generateRandomId();
-
     if (!user) {
+      const randomId = generateRandomId();
+
       user = await prisma.user.create({
         data: {
           email: data.email,
