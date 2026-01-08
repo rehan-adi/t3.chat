@@ -6,12 +6,12 @@ export const authRoute = new Hono();
 
 authRoute.post(
   "/request-otp",
-  rateLimiter({ points: 10, duration: 300 }),
+  rateLimiter({ points: 3, duration: 300 }),
   requestOtp
 );
 authRoute.post(
   "/verify-otp",
-  rateLimiter({ points: 10, duration: 300 }),
+  rateLimiter({ points: 3, duration: 300 }),
   verifyOtp
 );
 authRoute.post("/logout", logout);
