@@ -9,7 +9,7 @@ type BlockOptions = {
   keyPrefix?: string;
 };
 
-export const rateLimiter = ({ 
+export const rateLimiter = ({
   points = 3,
   duration = 600,
   blockDuration = 600,
@@ -24,11 +24,15 @@ export const rateLimiter = ({
   });
 
   return async (c: Context, next: Next) => {
-    const key =
+    const user = c.get("user");
+    const ip =
       c.req.header("x-forwarded-for") ||
       c.req.header("cf-connecting-ip") ||
-      c.req.header("host") ||
       "unknown-ip";
+
+    const key = user?.id
+      ? `user:${user.id}:${c.req.path}`
+      : `ip:${ip}:${c.req.path}`;
 
     try {
       await limiter.consume(key);
