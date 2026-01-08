@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/utils/logger";
 import { config } from "@/config/config";
 import { redisClient } from "@/lib/redis";
+import { deleteCookie } from "hono/cookie";
+import { Trait } from "@/generated/prisma/client";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import {
   updateNameSchema,
@@ -116,6 +118,8 @@ export const deleteAccount = async (c: Context) => {
     });
 
     await redisClient.del(`user:customization:${userId}`);
+
+    deleteCookie(c, "token");
 
     logger.info(
       {
@@ -438,7 +442,7 @@ export const updateCustomization = async (c: Context) => {
       systemName?: string;
       systemBio?: string;
       systemPrompt?: string;
-      systemTrait?: string[];
+      systemTrait?: Trait[];
     }>();
 
     const data: any = {};
@@ -645,7 +649,7 @@ export const createApiKey = async (c: Context) => {
       );
     }
 
-    const url = `https://openrouter.ai/api/v1/keys/${data.key}`;
+    const url = `https://openrouter.ai/api/v1/credits`;
 
     const options = {
       method: "GET",
@@ -692,6 +696,14 @@ export const createApiKey = async (c: Context) => {
           },
           401
         );
+      } else if (response.status === 403) {
+        return c.json(
+          {
+            success: false,
+            message: "[FORBIDDEN] request forbidden from openrouter",
+          },
+          403
+        );
       } else {
         return c.json(
           {
@@ -714,7 +726,7 @@ export const createApiKey = async (c: Context) => {
       return c.json(
         {
           success: false,
-          message: "Error while verifing OpenRouter API key",
+          message: "Error while verifing openrouter API key",
         },
         500
       );
