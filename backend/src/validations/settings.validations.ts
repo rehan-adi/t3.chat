@@ -8,5 +8,5 @@ export const createApiKeySchema = z.object({
   key: z
     .string()
     .trim()
-    .startsWith("sk-or-or-v1-", "Invalid OpenRouter API key format"),
+    .startsWith("sk-or-v1-", "Invalid OpenRouter API key format"),
 });
