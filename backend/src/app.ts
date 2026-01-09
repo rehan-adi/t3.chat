@@ -1,5 +1,6 @@
 import { cors } from "hono/cors";
 import { config } from "@/config/config";
+import { register } from "@/lib/metrics";
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { requestLogger } from "@/middlewares/logger";
@@ -38,6 +39,14 @@ app.route("/api/v1/health", healthRoute);
 app.route("/api/v1/settings", settingRoute);
 app.route("/api/v1/subscription", subscriptionRoute);
 app.route("/api/v1/conversations", conversationRoute);
+
+app.get("/metrics", async () => {
+  return new Response(await register.metrics(), {
+    headers: {
+      "Content-Type": register.contentType,
+    },
+  });
+});
 
 /**
  * this route is for generating fucking presigned url,

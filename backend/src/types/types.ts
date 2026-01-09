@@ -12,4 +12,8 @@ export const Models: Model[] = [
     id: "x-ai/grok-4.1-fast:free",
     name: "xAI: Grok 4.1 Fast (free)",
   },
+  {
+    id: "xiaomi/mimo-v2-flash:free",
+    name: "Xiaomi: MiMo-V2-Flash (free)",
+  },
 ];
