@@ -4,6 +4,7 @@ import { logger } from "@/utils/logger";
 import { config } from "@/config/config";
 import { cashfree } from "@/lib/cashfree";
 import { generateOrderId } from "@/utils/generateRandomId";
+import { sendSubscriptionSuccessEmail } from "@/utils/sendEmail";
 
 /**
  * @desc initiateSubscription initiate a order in cashfree and return a payment_session_id.
@@ -314,12 +315,18 @@ export const cashfreeWebHook = async (c: Context) => {
     const timestamp = c.req.header("x-webhook-timestamp");
 
     if (!signature || !timestamp) {
+      logger.warn(
+        {
+          ip,
+          requestId,
+        },
+        "Missing webhook headers"
+      );
       return c.json(
         {
-          success: false,
-          message: "Missing webhook headers",
+          success: true,
         },
-        400
+        200
       );
     }
 
@@ -336,10 +343,9 @@ export const cashfreeWebHook = async (c: Context) => {
       );
       return c.json(
         {
-          success: false,
-          message: "Invalid signature",
+          success: true,
         },
-        401
+        200
       );
     }
 
@@ -349,6 +355,7 @@ export const cashfreeWebHook = async (c: Context) => {
       where: {
         orderId: payload.data.order.order_id,
       },
+      include: { user: true },
     });
 
     if (!order) {
@@ -367,7 +374,7 @@ export const cashfreeWebHook = async (c: Context) => {
           requestId,
           orderId: payload.data.order.order_id,
         },
-        `Payment already SUCCESSED for this orderId ${order.id}`
+        `Payment already SUCCESS for this orderId ${order.id}`
       );
       return c.json(
         {
@@ -404,6 +411,19 @@ export const cashfreeWebHook = async (c: Context) => {
             },
           }),
         ]);
+        try {
+          await sendSubscriptionSuccessEmail({
+            to: order.user.email,
+            planName: "PREMIUM",
+            amount: subscriptionPlan.PREMIUM,
+            billingCycle: "monthly",
+          });
+        } catch (err) {
+          logger.error(
+            { err, orderId: order.id },
+            "Failed to send Email after payment success"
+          );
+        }
       }
     } else if (payload.type === "PAYMENT_FAILED_WEBHOOK") {
       if (payload.data.payment.payment_status === "FAILED") {
