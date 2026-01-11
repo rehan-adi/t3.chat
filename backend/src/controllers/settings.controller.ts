@@ -151,6 +151,76 @@ export const deleteAccount = async (c: Context) => {
 };
 
 /**
+ * @desc updateBillingPreference Update billing preference (enable/disable)
+ * @param c Hono Context
+ * @returns Json response
+ */
+
+export const updateBillingPreference = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    const { isbillingPreferencesEnable } = await c.req.json();
+
+    if (typeof isbillingPreferencesEnable !== "boolean") {
+      return c.json(
+        {
+          success: false,
+          message: "isBillingPreferencesEnabled must be boolean",
+        },
+        400
+      );
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { isbillingPreferencesEnable },
+      select: {
+        id: true,
+        email: true,
+        isbillingPreferencesEnable: true,
+      },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: user.id,
+        userEmail: user.email,
+        isbillingPreferencesEnable,
+      },
+      "Billing preference updated"
+    );
+
+    return c.json(
+      {
+        success: true,
+        message: "Billing preference updated successfully",
+        data: {
+          isBillingPreferencesEnabled: user.isbillingPreferencesEnable,
+        },
+      },
+      200
+    );
+  } catch (error) {
+    logger.error({ error }, "Error in updateBillingPreference controller");
+
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500
+    );
+  }
+};
+
+/**
  * @desc updateName update user's name.
  * @param c Hono Context
  * @returns Json response

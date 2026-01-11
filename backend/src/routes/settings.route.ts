@@ -13,6 +13,7 @@ import {
   deleteChatHistory,
   updateCustomization,
   updateProfilePicture,
+  updateBillingPreference,
 } from "@/controllers/settings.controller";
 
 export const settingRoute = new Hono();
@@ -23,21 +24,27 @@ settingRoute.get(
   rateLimiter({ points: 70, duration: 300 }),
   getAccount
 );
+settingRoute.patch(
+  "/account/billing-preferences",
+  authorization,
+  rateLimiter({ points: 5, duration: 300 }),
+  updateBillingPreference
+);
 settingRoute.delete(
-  "/account/delete",
+  "/account",
   authorization,
   rateLimiter({ points: 1, duration: 300 }),
   deleteAccount
 );
 
 settingRoute.patch(
-  "/update-name",
+  "/account/name",
   authorization,
   rateLimiter({ points: 10, duration: 300 }),
   updateName
 );
 settingRoute.patch(
-  "/update-pfp",
+  "/account/profile-picture",
   authorization,
   rateLimiter({ points: 3, duration: 300 }),
   updateProfilePicture
@@ -63,7 +70,7 @@ settingRoute.get(
   getApiKey
 );
 settingRoute.post(
-  "/create-key",
+  "/api-keys",
   authorization,
   rateLimiter({ points: 5, duration: 300 }),
   createApiKey
