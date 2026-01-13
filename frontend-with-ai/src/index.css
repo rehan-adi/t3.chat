@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Chat Application Design System - Clean, minimal, functional */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 9% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 9% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 9% 12%;
+
+    --primary: 220 13% 18%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 9% 94%;
+    --secondary-foreground: 220 9% 12%;
+
+    --muted: 220 9% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 9% 92%;
+    --accent-foreground: 220 9% 12%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 9% 89%;
+    --input: 220 9% 89%;
+    --ring: 220 13% 18%;
+
+    --radius: 0.5rem;
+
+    /* Chat-specific tokens */
+    --sidebar-background: 220 9% 97%;
+    --sidebar-foreground: 220 9% 26%;
+    --sidebar-primary: 220 9% 12%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 9% 92%;
+    --sidebar-accent-foreground: 220 9% 12%;
+    --sidebar-border: 220 9% 89%;
+    --sidebar-ring: 220 13% 18%;
+
+    --chat-user-bg: 220 13% 18%;
+    --chat-user-fg: 0 0% 100%;
+    --chat-ai-bg: 220 9% 96%;
+    --chat-ai-fg: 220 9% 12%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    /* #181316 = hsl(330 12% 9%) */
+    --background: 330 12% 9%;
+    --foreground: 0 0% 100%;
+
+    --card: 330 12% 11%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 330 12% 11%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 330 12% 9%;
+
+    --secondary: 330 10% 16%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 330 10% 16%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 330 10% 18%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 330 10% 18%;
+    --input: 330 10% 18%;
+    --ring: 0 0% 80%;
+
+    --sidebar-background: 330 12% 7%;
+    --sidebar-foreground: 0 0% 80%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 330 12% 9%;
+    --sidebar-accent: 330 10% 14%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 330 10% 16%;
+    --sidebar-ring: 0 0% 80%;
+
+    --chat-user-bg: 330 10% 20%;
+    --chat-user-fg: 0 0% 100%;
+    --chat-ai-bg: 330 10% 14%;
+    --chat-ai-fg: 0 0% 100%;
+
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+}
