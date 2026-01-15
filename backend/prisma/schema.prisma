@@ -32,6 +32,7 @@ model User {
 model Conversation {
   id        String    @id @default(uuid())
   title     String?
+  summary   String?
   pinned    Boolean   @default(false)
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
