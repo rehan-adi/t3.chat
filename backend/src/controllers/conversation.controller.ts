@@ -5,6 +5,7 @@ import { logger } from "@/utils/logger";
 import { config } from "@/config/config";
 import { redisClient } from "@/lib/redis";
 import { streamSSE } from "hono/streaming";
+import type { Message } from "@openrouter/sdk/models";
 import { createOpenRouterClient } from "@/lib/openrouter";
 import { userProfilePrompt } from "@/utils/userProfilePrompt";
 import { updateConversationSchema } from "@/validations/conversation.validation";
@@ -446,6 +447,12 @@ export const deleteConversation = async (c: Context) => {
   }
 };
 
+/**
+ * @desc conversationChatController do nothing, just call LLM api that's it 😇.
+ * @param c Hono Context
+ * @returns Stream Respons
+ */
+
 export const conversationChatController = async (c: Context) => {
   let id = 0;
 
@@ -506,12 +513,11 @@ export const conversationChatController = async (c: Context) => {
           402
         );
       }
-      billingMode = "CREDITS";
     }
 
-    let finalConversationId: string;
+    let finalConversationId = conversationId;
 
-    if (!conversationId) {
+    if (!finalConversationId) {
       const newConv = await prisma.conversation.create({
         data: {
           userId,
@@ -519,8 +525,6 @@ export const conversationChatController = async (c: Context) => {
         },
       });
       finalConversationId = newConv.id;
-    } else {
-      finalConversationId = conversationId;
     }
 
     const conversation = await prisma.conversation.findUnique({
@@ -536,6 +540,12 @@ export const conversationChatController = async (c: Context) => {
         403
       );
     }
+
+    const recentMessages = await prisma.message.findMany({
+      where: { conversationId: finalConversationId },
+      orderBy: { createdAt: "asc" },
+      take: 5,
+    });
 
     await prisma.message.create({
       data: {
@@ -577,14 +587,31 @@ export const conversationChatController = async (c: Context) => {
       ? userProfilePrompt(profile)
       : "The user has not provided personal details. But call users as bro and be formal";
 
+    const finalMessages: Message[] = [];
+
+    finalMessages.push({ role: "system", content: systemPrompt });
+
+    if (conversation.summary) {
+      finalMessages.push({
+        role: "system",
+        content: `Conversation summary so far: ${conversation.summary}`,
+      });
+    }
+
+    for (const msg of recentMessages) {
+      finalMessages.push({
+        role: msg.role === "ai" ? "assistant" : "user",
+        content: msg.response,
+      });
+    }
+
+    finalMessages.push({ role: "user", content: prompt });
+
     const openRouterClient = createOpenRouterClient(apiKeyToUse);
 
     const aiStream = await openRouterClient.chat.send({
       model: modelId,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
+      messages: finalMessages,
       stream: true,
       streamOptions: { includeUsage: true },
     });
@@ -596,6 +623,14 @@ export const conversationChatController = async (c: Context) => {
       await sse.writeSSE({
         event: "message_start",
         data: "message_start",
+        id: String(id++),
+      });
+
+      await sse.writeSSE({
+        event: "conversation_id",
+        data: JSON.stringify({
+          conversationId: finalConversationId,
+        }),
         id: String(id++),
       });
 
@@ -632,14 +667,83 @@ export const conversationChatController = async (c: Context) => {
         },
       });
 
+      const messageCount = await prisma.message.count({
+        where: {
+          conversationId: finalConversationId,
+        },
+      });
+
+      if (messageCount >= 3) {
+        const oldMessages = await prisma.message.findMany({
+          where: {
+            conversationId: finalConversationId,
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+          take: messageCount - 5,
+        });
+
+        if (oldMessages.length > 0) {
+          const summaryPrompt: Message[] = [
+            {
+              role: "system",
+              content:
+                "You are a conversation memory summarizer. Merge the existing summary " +
+                "with the new messages into a concise updated summary under 120 words. " +
+                "Remove redundancy. Return ONLY the summary text.",
+            },
+            {
+              role: "user",
+              content: `
+Existing summary:
+${conversation.summary || "None"}
+
+New messages:
+${recentMessages.map((m) => `${m.role}: ${m.response}`).join("\n")}
+`,
+            },
+          ];
+
+          const summaryResponse = await openRouterClient.chat.send({
+            model: "mistralai/devstral-2512:free",
+            messages: summaryPrompt,
+            stream: false,
+          });
+
+          const rawContent = summaryResponse.choices?.[0]?.message?.content;
+
+          const newSummary =
+            typeof rawContent === "string"
+              ? rawContent
+              : rawContent
+                  ?.map((c) => ("text" in c ? c.text : ""))
+                  .join("")
+                  .trim();
+
+          if (newSummary) {
+            await prisma.conversation.update({
+              where: {
+                id: finalConversationId,
+              },
+              data: {
+                summary: newSummary,
+              },
+            });
+
+            const idsToDelete = oldMessages.map((m) => m.id);
+
+            await prisma.message.deleteMany({
+              where: { id: { in: idsToDelete } },
+            });
+          }
+        }
+      }
+
       if (billingMode === "CREDITS") {
         await prisma.user.update({
           where: { id: userId },
-          data: {
-            credits: {
-              decrement: 1,
-            },
-          },
+          data: { credits: { decrement: 1 } },
         });
       }
 
