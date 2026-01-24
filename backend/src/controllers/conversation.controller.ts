@@ -53,7 +53,7 @@ export const getAllConversation = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -63,16 +63,24 @@ export const getAllConversation = async (c: Context) => {
         requestId: requestId,
         userId: userId,
       },
-      "Data fetched successfully"
+      "Data fetched successfully",
     );
 
     return c.json(
       {
         success: true,
         message: "Data fetched successfully",
-        data: userWithConversation,
+        data: {
+          user: {
+            id: userWithConversation.id,
+            name: userWithConversation.name,
+            isPremium: userWithConversation.isPremium,
+            profilePicture: userWithConversation.profilePicture,
+          },
+          conversations: userWithConversation.conversation,
+        },
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in getAllConversation controller");
@@ -82,7 +90,7 @@ export const getAllConversation = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -113,7 +121,7 @@ export const getConversationById = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -135,7 +143,7 @@ export const getConversationById = async (c: Context) => {
           success: false,
           message: "Conversation not found or does not belong to you",
         },
-        403
+        403,
       );
     }
 
@@ -147,7 +155,7 @@ export const getConversationById = async (c: Context) => {
         userEmail: user.email,
         conversationId: conversationId,
       },
-      "Fetched conversation successfully"
+      "Fetched conversation successfully",
     );
 
     return c.json(
@@ -156,7 +164,7 @@ export const getConversationById = async (c: Context) => {
         message: "Conversation fetched successfully",
         data: conversation,
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in getConversationById controller");
@@ -166,7 +174,7 @@ export const getConversationById = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -194,7 +202,7 @@ export const updateConversationPin = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -210,7 +218,7 @@ export const updateConversationPin = async (c: Context) => {
           success: false,
           message: "Conversation not found or does not belong to you",
         },
-        403
+        403,
       );
     }
 
@@ -222,7 +230,7 @@ export const updateConversationPin = async (c: Context) => {
           success: false,
           message: "Pinned value must be boolean",
         },
-        400
+        400,
       );
     }
 
@@ -239,7 +247,7 @@ export const updateConversationPin = async (c: Context) => {
         userEmail: user.email,
         conversationId: conversationId,
       },
-      `Conversation ${body.pinned ? "pinned" : "unpinned"} successfully`
+      `Conversation ${body.pinned ? "pinned" : "unpinned"} successfully`,
     );
 
     return c.json(
@@ -250,7 +258,7 @@ export const updateConversationPin = async (c: Context) => {
         } successfully`,
         data: update,
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in updateConversationPin controller");
@@ -260,7 +268,7 @@ export const updateConversationPin = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -288,7 +296,7 @@ export const updateConversation = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -304,7 +312,7 @@ export const updateConversation = async (c: Context) => {
           success: false,
           message: "Conversation not found or does not belong to you",
         },
-        403
+        403,
       );
     }
 
@@ -318,7 +326,7 @@ export const updateConversation = async (c: Context) => {
           success: false,
           message: error.message,
         },
-        400
+        400,
       );
     }
 
@@ -339,7 +347,7 @@ export const updateConversation = async (c: Context) => {
         userEmail: user.email,
         conversationId: conversationId,
       },
-      "Conversation title updated successfully"
+      "Conversation title updated successfully",
     );
 
     return c.json(
@@ -348,7 +356,7 @@ export const updateConversation = async (c: Context) => {
         message: "Conversation title updated successfully",
         data: updatedConversation,
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in updateConversation controller");
@@ -358,7 +366,7 @@ export const updateConversation = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -388,7 +396,7 @@ export const deleteConversation = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -407,7 +415,7 @@ export const deleteConversation = async (c: Context) => {
           success: false,
           message: "Conversation not found or does not belong to you",
         },
-        403
+        403,
       );
     }
 
@@ -424,7 +432,7 @@ export const deleteConversation = async (c: Context) => {
         userId: userId,
         userEmail: user.email,
       },
-      "Conversation deleted successfully"
+      "Conversation deleted successfully",
     );
 
     return c.json(
@@ -432,7 +440,7 @@ export const deleteConversation = async (c: Context) => {
         success: true,
         message: "Conversation deleted successfully",
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in deleteConversation controller");
@@ -442,7 +450,7 @@ export const deleteConversation = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -473,7 +481,7 @@ export const conversationChatController = async (c: Context) => {
           success: false,
           message: "Model is not supported",
         },
-        400
+        400,
       );
     }
 
@@ -490,7 +498,7 @@ export const conversationChatController = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -510,7 +518,7 @@ export const conversationChatController = async (c: Context) => {
             success: false,
             message: "You are out of credits, upgrade to premium",
           },
-          402
+          402,
         );
       }
     }
@@ -537,7 +545,7 @@ export const conversationChatController = async (c: Context) => {
           success: false,
           message: "Conversation does not exist or does not belong to you",
         },
-        403
+        403,
       );
     }
 
@@ -578,7 +586,7 @@ export const conversationChatController = async (c: Context) => {
           `user:customization:${userId}`,
           JSON.stringify(profile),
           "EX",
-          3600
+          3600,
         );
       }
     }
@@ -761,7 +769,7 @@ ${recentMessages.map((m) => `${m.role}: ${m.response}`).join("\n")}
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
