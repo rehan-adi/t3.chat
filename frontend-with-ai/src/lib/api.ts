@@ -182,4 +182,55 @@ export const conversationsApi = {
   },
 };
 
+export interface InitSubscriptionResponse {
+  success: boolean;
+  message: string;
+  data: {
+    entity: string;
+    order_id: string;
+    order_amount: number;
+    order_status: string;
+    order_currency: string;
+    order_expiry_time: string;
+    payment_session_id: string;
+  };
+}
+
+export interface VerifySubscriptionResponse {
+  success: boolean;
+  status?: string;
+  message?: string;
+}
+
+export const subscriptionApi = {
+  initiateSubscription: async (
+    planId: string
+  ): Promise<InitSubscriptionResponse> => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/subscription/init-subscription`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ planId }),
+      }
+    );
+
+    return handleResponse(response);
+  },
+
+  verifySubscription: async (
+    orderId: string
+  ): Promise<VerifySubscriptionResponse> => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/subscription/verify/${orderId}`,
+      {
+        credentials: "include",
+      }
+    );
+
+    return handleResponse(response);
+  },
+};
+
 export const getApiBaseUrl = () => API_BASE_URL;
