@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { load } from "@cashfreepayments/cashfree-js";
 import { Loader2, CreditCard } from "lucide-react";
+import { load } from "@cashfreepayments/cashfree-js";
+import { useSearchParams, useNavigate } from "react-router-dom";
 
 export default function Done() {
   const [searchParams] = useSearchParams();

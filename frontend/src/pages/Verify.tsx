@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
 import { subscriptionApi } from "@/lib/api";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, ArrowRight } from "lucide-react";
 
 export default function VerifySubscriptionPage() {
@@ -9,7 +9,7 @@ export default function VerifySubscriptionPage() {
   const orderId = searchParams.get("order_id");
 
   const [status, setStatus] = useState<"loading" | "success" | "error">(
-    "loading"
+    "loading",
   );
   const [message, setMessage] = useState("");
 

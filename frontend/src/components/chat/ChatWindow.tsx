@@ -1,6 +1,6 @@
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
-import { Loader2 } from "lucide-react";
 
 export interface ChatMessage {
   id: string;

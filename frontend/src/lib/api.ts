@@ -204,7 +204,7 @@ export interface VerifySubscriptionResponse {
 
 export const subscriptionApi = {
   initiateSubscription: async (
-    planId: string
+    planId: string,
   ): Promise<InitSubscriptionResponse> => {
     const response = await fetch(
       `${API_BASE_URL}/api/v1/subscription/init-subscription`,
@@ -213,20 +213,20 @@ export const subscriptionApi = {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ planId }),
-      }
+      },
     );
 
     return handleResponse(response);
   },
 
   verifySubscription: async (
-    orderId: string
+    orderId: string,
   ): Promise<VerifySubscriptionResponse> => {
     const response = await fetch(
       `${API_BASE_URL}/api/v1/subscription/verify/${orderId}`,
       {
         credentials: "include",
-      }
+      },
     );
 
     return handleResponse(response);

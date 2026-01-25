@@ -1,6 +1,6 @@
 import axios from "axios";
-import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
 export default function VerifyOtp() {
   const navigate = useNavigate();

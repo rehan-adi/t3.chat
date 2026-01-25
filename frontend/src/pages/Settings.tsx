@@ -1,16 +1,29 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { settingsApi, authApi, AccountSettings, SubscriptionInfo } from '@/lib/api';
-import { Loader2, ArrowLeft, User, CreditCard, LogOut } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  settingsApi,
+  authApi,
+  AccountSettings,
+  SubscriptionInfo,
+} from "@/lib/api";
+import { Loader2, ArrowLeft, User, CreditCard, LogOut } from "lucide-react";
 
 export default function Settings() {
   const navigate = useNavigate();
   const [account, setAccount] = useState<AccountSettings | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -23,7 +36,9 @@ export default function Settings() {
         setAccount(accountData);
         setSubscription(subscriptionData);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load settings');
+        setError(
+          err instanceof Error ? err.message : "Failed to load settings",
+        );
       } finally {
         setIsLoading(false);
       }
@@ -36,7 +51,7 @@ export default function Settings() {
     try {
       await authApi.logout();
     } catch (err) {
-      navigate('/signin');
+      navigate("/signin");
     }
   };
 
@@ -90,7 +105,7 @@ export default function Settings() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Name</p>
-                  <p className="font-medium">{account.name || 'Not set'}</p>
+                  <p className="font-medium">{account.name || "Not set"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Member since</p>
@@ -100,7 +115,9 @@ export default function Settings() {
                 </div>
               </>
             ) : (
-              <p className="text-muted-foreground">Unable to load account info</p>
+              <p className="text-muted-foreground">
+                Unable to load account info
+              </p>
             )}
           </CardContent>
         </Card>
@@ -123,7 +140,9 @@ export default function Settings() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
-                  <p className="font-medium capitalize">{subscription.status}</p>
+                  <p className="font-medium capitalize">
+                    {subscription.status}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Renews on</p>
@@ -133,7 +152,9 @@ export default function Settings() {
                 </div>
               </>
             ) : (
-              <p className="text-muted-foreground">Unable to load subscription info</p>
+              <p className="text-muted-foreground">
+                Unable to load subscription info
+              </p>
             )}
           </CardContent>
         </Card>
