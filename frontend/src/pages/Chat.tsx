@@ -17,6 +17,7 @@ export default function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -35,10 +36,12 @@ export default function Chat() {
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
+      setIsLoadingMessages(false);
       return;
     }
 
     const fetchMessages = async () => {
+      setIsLoadingMessages(true);
       try {
         const conversation = await conversationsApi.get(activeConversationId);
         setMessages(
@@ -50,6 +53,16 @@ export default function Chat() {
         );
       } catch (error) {
         console.error("Failed to fetch messages:", error);
+        setMessages([]);
+        setMessages([
+          {
+            id: "error",
+            role: "assistant",
+            content: "Failed to load conversation. Please try again.",
+          },
+        ]);
+      } finally {
+        setIsLoadingMessages(false);
       }
     };
     fetchMessages();
@@ -61,13 +74,67 @@ export default function Chat() {
     setIsSidebarOpen(false);
   }, []);
 
-  const handleSelectConversation = useCallback((id: string) => {
-    setActiveConversationId(id);
-    setIsSidebarOpen(false);
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      if (id === activeConversationId) return; // Don't reload if already selected
+      setActiveConversationId(id);
+      setIsSidebarOpen(false);
+    },
+    [activeConversationId],
+  );
+
+  const handleDeleteConversation = useCallback(
+    async (id: string) => {
+      try {
+        await conversationsApi.delete(id);
+        // If deleted conversation was active, clear it
+        if (id === activeConversationId) {
+          setActiveConversationId(null);
+          setMessages([]);
+        }
+        // Refresh conversations list
+        const data = await conversationsApi.list();
+        setConversations(data.conversations);
+      } catch (error) {
+        console.error("Failed to delete conversation:", error);
+        // Could show a toast notification here
+      }
+    },
+    [activeConversationId],
+  );
+
+  const handleTogglePin = useCallback(async (id: string, pinned: boolean) => {
+    try {
+      await conversationsApi.togglePin(id, pinned);
+      // Refresh conversations list to get updated pin status
+      const data = await conversationsApi.list();
+      setConversations(data.conversations);
+    } catch (error) {
+      console.error("Failed to toggle pin:", error);
+    }
   }, []);
 
+  const handleUpdateTitle = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await conversationsApi.update(id, title);
+        // Refresh conversations list to get updated title
+        const data = await conversationsApi.list();
+        setConversations(data.conversations);
+        // If it's the active conversation, update the title in the UI
+        if (id === activeConversationId) {
+          // Title will be updated when we refresh the list
+        }
+      } catch (error) {
+        console.error("Failed to update title:", error);
+        throw error;
+      }
+    },
+    [activeConversationId],
+  );
+
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, modelId: string) => {
       if (isStreaming) return;
 
       // Add user message
@@ -132,6 +199,7 @@ export default function Chat() {
         await sendMessageWithSSE(
           activeConversationId,
           content,
+          modelId,
           handleToken,
           () => handleDone(),
           handleError,
@@ -139,6 +207,7 @@ export default function Chat() {
       } else {
         await sendNewConversationMessage(
           content,
+          modelId,
           handleToken,
           handleDone,
           handleError,
@@ -167,10 +236,14 @@ export default function Chat() {
           conversations={conversations.map((c) => ({
             id: c.id,
             title: c.title,
+            pinned: c.pinned,
           }))}
           activeConversationId={activeConversationId || undefined}
           onNewChat={handleNewChat}
           onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+          onTogglePin={handleTogglePin}
+          onUpdateTitle={handleUpdateTitle}
           userDetails={userDetails}
         />
       </div>
@@ -195,7 +268,9 @@ export default function Chat() {
         {/* Chat area */}
         <ChatWindow
           messages={messages}
-          isLoading={isStreaming && messages.length === 0}
+          isLoading={
+            (isStreaming && messages.length === 0) || isLoadingMessages
+          }
         />
 
         <ChatInput onSend={handleSendMessage} disabled={isStreaming} />

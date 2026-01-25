@@ -74,14 +74,30 @@ export const creditApi = {
       },
     );
 
-    return handleResponse(response);
+    const json = await handleResponse<{
+      success: boolean;
+      credits: number;
+      resetApplied: boolean;
+    }>(response);
+
+    // For now, we'll use credits as remaining and calculate total based on premium status
+    // This will be updated when we get user info
+    return {
+      remaining: json.credits,
+      total: 20, // Will be updated from account info
+    };
   },
 };
 
 export interface AccountSettings {
+  id: string;
   email: string;
-  name: string;
-  createdAt: string;
+  name: string | null;
+  credits: number;
+  isPremium: boolean;
+  profilePicture: string | null;
+  isEmailVerified: boolean;
+  isbillingPreferencesEnable: boolean;
 }
 
 export interface SubscriptionInfo {
@@ -96,7 +112,13 @@ export const settingsApi = {
       credentials: "include",
     });
 
-    return handleResponse(response);
+    const json = await handleResponse<{
+      success: boolean;
+      message: string;
+      data: AccountSettings;
+    }>(response);
+
+    return json.data;
   },
 
   getSubscription: async (): Promise<SubscriptionInfo> => {
@@ -118,6 +140,7 @@ export interface Message {
 export interface Conversation {
   id: string;
   title: string;
+  pinned?: boolean;
   messages: Message[];
   createdAt: string;
   updatedAt: string;
@@ -180,6 +203,125 @@ export const conversationsApi = {
 
     return json.data;
   },
+
+  delete: async (id: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "/signin";
+        throw new ApiError(401, "Unauthorized");
+      }
+      const errorText = await response.text();
+      throw new ApiError(response.status, errorText || response.statusText);
+    }
+  },
+
+  togglePin: async (id: string, pinned: boolean): Promise<void> => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/conversations/${id}/pin`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ pinned }),
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "/signin";
+        throw new ApiError(401, "Unauthorized");
+      }
+      const errorText = await response.text();
+      throw new ApiError(response.status, errorText || response.statusText);
+    }
+  },
+
+  update: async (id: string, title: string): Promise<Conversation> => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/conversations/${id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title }),
+      },
+    );
+
+    const json = await handleResponse<{
+      success: boolean;
+      message: string;
+      data: Conversation;
+    }>(response);
+
+    return json.data;
+  },
+};
+
+export interface ApiKeyInfo {
+  byokEnable: boolean;
+  apiKey: {
+    id: string;
+    maskedKey: string;
+    createdAt: string;
+  } | null;
+}
+
+export const apiKeysApi = {
+  get: async (): Promise<ApiKeyInfo> => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/settings/api-keys`, {
+      credentials: "include",
+    });
+
+    const json = await handleResponse<{
+      success: boolean;
+      message: string;
+      data: ApiKeyInfo;
+    }>(response);
+
+    return json.data;
+  },
+
+  create: async (key: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/settings/api-keys`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ key }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "/signin";
+        throw new ApiError(401, "Unauthorized");
+      }
+      const errorText = await response.text();
+      throw new ApiError(response.status, errorText || response.statusText);
+    }
+  },
+
+  delete: async (): Promise<void> => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/settings/api-keys/delete`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "/signin";
+        throw new ApiError(401, "Unauthorized");
+      }
+      const errorText = await response.text();
+      throw new ApiError(response.status, errorText || response.statusText);
+    }
+  },
 };
 
 export interface InitSubscriptionResponse {
@@ -230,6 +372,28 @@ export const subscriptionApi = {
     );
 
     return handleResponse(response);
+  },
+};
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  isPaid: boolean;
+}
+
+export const modelsApi = {
+  list: async (): Promise<ModelInfo[]> => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/models`, {
+      credentials: "include",
+    });
+
+    const json = await handleResponse<{
+      success: boolean;
+      message?: string;
+      data: ModelInfo[];
+    }>(response);
+
+    return json.data;
   },
 };
 

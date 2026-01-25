@@ -9,13 +9,14 @@ export interface SSEMessage {
 export async function sendMessageWithSSE(
   conversationId: string,
   message: string,
+  modelId: string,
   onToken: (token: string) => void,
   onDone: () => void,
   onError: (error: string) => void,
 ): Promise<void> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/v1/conversations/${conversationId}/messages`,
+      `${API_BASE_URL}/api/v1/conversations`,
       {
         method: "POST",
         headers: {
@@ -23,7 +24,11 @@ export async function sendMessageWithSSE(
           Accept: "text/event-stream",
         },
         credentials: "include",
-        body: JSON.stringify({ content: message }),
+        body: JSON.stringify({
+          conversationId,
+          prompt: message,
+          model: modelId,
+        }),
       },
     );
 
@@ -42,6 +47,7 @@ export async function sendMessageWithSSE(
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let currentEvent = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -55,8 +61,12 @@ export async function sendMessageWithSSE(
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line.startsWith("event: ")) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
           const data = line.slice(6);
 
           if (data === "[DONE]") {
@@ -64,24 +74,52 @@ export async function sendMessageWithSSE(
             return;
           }
 
-          try {
-            const parsed: SSEMessage = JSON.parse(data);
-
-            if (parsed.type === "token" && parsed.content) {
-              onToken(parsed.content);
-            } else if (parsed.type === "done") {
-              onDone();
-              return;
-            } else if (parsed.type === "error" && parsed.error) {
-              onError(parsed.error);
-              return;
-            }
-          } catch {
-            // If not JSON, treat as plain text token
-            if (data.trim()) {
+          // Handle different event types from backend
+          if (currentEvent === "content_block_delta") {
+            // This is the token content - send it directly if not empty
+            if (data && data.trim()) {
               onToken(data);
             }
+          } else if (currentEvent === "conversation_id") {
+            // Conversation ID is sent, but we already have it for existing conversations
+            // This is mainly useful for new conversations
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.conversationId) {
+                // Could be used to update conversation ID if needed
+              }
+            } catch {
+              // Ignore parsing errors
+            }
+          } else if (currentEvent === "message_start") {
+            // Message started, nothing to do
+          } else if (currentEvent === "usage") {
+            // Usage data, can be ignored for now
+          } else if (!currentEvent) {
+            // No event specified, try to parse as JSON or treat as plain text
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "token" && parsed.content) {
+                onToken(parsed.content);
+              } else if (parsed.type === "done") {
+                onDone();
+                return;
+              } else if (parsed.type === "error" && parsed.error) {
+                onError(parsed.error);
+                return;
+              }
+            } catch {
+              // If not JSON, treat as plain text token
+              if (data.trim()) {
+                onToken(data);
+              }
+            }
           }
+
+          // Don't reset currentEvent here - it might be used for next data line
+        } else if (line.trim() === "") {
+          // Empty line indicates end of event block, reset event
+          currentEvent = "";
         }
       }
     }
@@ -93,6 +131,7 @@ export async function sendMessageWithSSE(
 // Alternative: Create a new conversation and send message
 export async function sendNewConversationMessage(
   message: string,
+  modelId: string,
   onToken: (token: string) => void,
   onDone: (conversationId: string) => void,
   onError: (error: string) => void,
@@ -105,7 +144,10 @@ export async function sendNewConversationMessage(
         Accept: "text/event-stream",
       },
       credentials: "include",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        prompt: message,
+        model: modelId,
+      }),
     });
 
     if (!response.ok) {
@@ -126,12 +168,14 @@ export async function sendNewConversationMessage(
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let currentEvent = "";
+    let newConversationId = conversationId;
 
     while (true) {
       const { done, value } = await reader.read();
 
       if (done) {
-        onDone(conversationId);
+        onDone(newConversationId);
         break;
       }
 
@@ -139,32 +183,64 @@ export async function sendNewConversationMessage(
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line.startsWith("event: ")) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
           const data = line.slice(6);
 
           if (data === "[DONE]") {
-            onDone(conversationId);
+            onDone(newConversationId);
             return;
           }
 
-          try {
-            const parsed = JSON.parse(data);
-
-            if (parsed.type === "token" && parsed.content) {
-              onToken(parsed.content);
-            } else if (parsed.type === "done") {
-              onDone(parsed.conversationId || conversationId);
-              return;
-            } else if (parsed.type === "error" && parsed.error) {
-              onError(parsed.error);
-              return;
-            }
-          } catch {
-            if (data.trim()) {
+          // Handle different event types from backend
+          if (currentEvent === "content_block_delta") {
+            // This is the token content - send it directly if not empty
+            if (data && data.trim()) {
               onToken(data);
             }
+          } else if (currentEvent === "conversation_id") {
+            // Extract conversation ID for new conversations
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.conversationId) {
+                newConversationId = parsed.conversationId;
+              }
+            } catch {
+              // Ignore parsing errors
+            }
+          } else if (currentEvent === "message_start") {
+            // Message started, nothing to do
+          } else if (currentEvent === "usage") {
+            // Usage data, can be ignored for now
+          } else if (!currentEvent) {
+            // No event specified, try to parse as JSON or treat as plain text
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "token" && parsed.content) {
+                onToken(parsed.content);
+              } else if (parsed.type === "done") {
+                onDone(parsed.conversationId || newConversationId);
+                return;
+              } else if (parsed.type === "error" && parsed.error) {
+                onError(parsed.error);
+                return;
+              }
+            } catch {
+              // If not JSON, treat as plain text token
+              if (data.trim()) {
+                onToken(data);
+              }
+            }
           }
+
+          // Don't reset currentEvent here - it might be used for next data line
+        } else if (line.trim() === "") {
+          // Empty line indicates end of event block, reset event
+          currentEvent = "";
         }
       }
     }
