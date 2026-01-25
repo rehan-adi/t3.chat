@@ -6,6 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { requestLogger } from "@/middlewares/logger";
 
 import { authRoute } from "@/routes/auth.route";
+import { modelRoute } from "@/routes/model.route";
 import { creditRoute } from "@/routes/credit.route";
 import { healthRoute } from "@/routes/health.route";
 import { settingRoute } from "@/routes/settings.route";
@@ -25,15 +26,11 @@ app.use(
     exposeHeaders: ["Content-Length", "X-Kuma-Revision"],
     maxAge: 600,
     credentials: true,
-  })
+  }),
 );
-// app.use(
-//   compress({
-//     encoding: "gzip",
-//   })
-// );
 
 app.route("/api/v1/auth", authRoute);
+app.route("/api/v1/models", modelRoute);
 app.route("/api/v1/credit", creditRoute);
 app.route("/api/v1/health", healthRoute);
 app.route("/api/v1/settings", settingRoute);
@@ -63,13 +60,13 @@ app.post("/api/v1/generate/presigned-url", async (c: Context) => {
         success: false,
         message: "Missing file name or type",
       },
-      400
+      400,
     );
   }
 
   const { url, publicUrl, key } = await generatePresignedUrl(
     fileName,
-    fileType
+    fileType,
   );
   return c.json({
     success: true,

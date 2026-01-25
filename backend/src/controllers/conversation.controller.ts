@@ -1,9 +1,9 @@
 import type { Context } from "hono";
 import { prisma } from "@/lib/prisma";
-import { Models } from "@/types/types";
 import { logger } from "@/utils/logger";
 import { config } from "@/config/config";
 import { redisClient } from "@/lib/redis";
+import { MODELS } from "@/contants/models";
 import { streamSSE } from "hono/streaming";
 import type { Message } from "@openrouter/sdk/models";
 import { createOpenRouterClient } from "@/lib/openrouter";
@@ -99,7 +99,7 @@ export const getAllConversation = async (c: Context) => {
  * @desc getConversationById fetch a single conversation and its messages by conversationId
  * @param c Hono Context
  * @returns Json Respons with data
- */ // (WORK NEED)
+ */
 
 export const getConversationById = async (c: Context) => {
   const ip = c.get("ip");
@@ -458,7 +458,7 @@ export const deleteConversation = async (c: Context) => {
 /**
  * @desc conversationChatController do nothing, just call LLM api that's it 😇.
  * @param c Hono Context
- * @returns Stream Respons
+ * @returns Stream Response
  */
 
 export const conversationChatController = async (c: Context) => {
@@ -473,7 +473,7 @@ export const conversationChatController = async (c: Context) => {
 
     const { conversationId, prompt, model: modelId } = body;
 
-    const model = Models.find((m) => m.id === modelId);
+    const model = MODELS.find((m) => m.id === modelId);
 
     if (!model) {
       return c.json(
