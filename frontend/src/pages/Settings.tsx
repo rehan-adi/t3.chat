@@ -14,7 +14,6 @@ import {
 } from "@/lib/api";
 import {
   ArrowLeft,
-  LogOut,
   Monitor,
   Sun,
   Moon,
@@ -22,6 +21,9 @@ import {
   History,
   Key,
   Settings as SettingsIcon,
+  Command,
+  ArrowBigUp,
+  Delete,
 } from "lucide-react";
 
 type SettingsTab = "account" | "customization" | "history" | "api-keys";
@@ -36,7 +38,6 @@ export default function Settings() {
   const [apiKeys, setApiKeys] = useState<ApiKeyInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [resetTime, setResetTime] = useState<string>("");
 
   const cycleTheme = () => {
     if (theme === "system") setTheme("light");
@@ -54,19 +55,8 @@ export default function Settings() {
         setAccount(accountData);
         setCredits({
           remaining: creditsData.remaining,
-          total: accountData.isPremium ? 250 : 20,
+          total: accountData.isPremium ? 250 : 5,
         });
-
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(5, 29, 0, 0);
-        setResetTime(
-          tomorrow.toLocaleString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          }),
-        );
       } catch (err) {
         console.error("Failed to load settings:", err);
       } finally {
@@ -99,16 +89,6 @@ export default function Settings() {
     }
   };
 
-  const getTotalCredits = () => {
-    if (!account) return 20;
-    return account.isPremium ? 250 : 20;
-  };
-
-  const getRemainingCredits = () => {
-    if (!credits) return 0;
-    return credits.remaining;
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -116,6 +96,13 @@ export default function Settings() {
       </div>
     );
   }
+
+  const totalCredits = account.isPremium ? 250 : 5;
+  const remainingCredits = credits.remaining;
+  const usedCredits = totalCredits - remainingCredits;
+
+  const usagePercentage =
+    totalCredits > 0 ? (usedCredits / totalCredits) * 100 : 0;
 
   return (
     <div className="min-h-screen w-full bg-background flex flex-col justify-start px-32">
@@ -168,7 +155,7 @@ export default function Settings() {
       </header>
 
       <div className="flex gap-10">
-        <div className="w-80 border-r border-border p-6 space-y-6">
+        <div className="w-[355px] p-6 space-y-6">
           <div className="flex flex-col items-center gap-4 pb-6">
             <div className="w-40 h-40 rounded-full bg-[#A2014D] flex items-center justify-center text-white font-semibold">
               {account?.name?.[0]?.toUpperCase() ||
@@ -176,85 +163,122 @@ export default function Settings() {
                 "U"}
             </div>
             <div className="flex flex-col justify-center items-center min-w-0">
-              <h2 className="font-semibold text-2xl truncate">
+              <h2 className="font-semibold text-2xl mb-1 truncate">
                 {account?.name || "User"}
               </h2>
-              <p className="text-md text-[#D4C7E1] text-muted-foreground truncate">
+              <p className="text-md text-[#E7D0DD] truncate">
                 {account?.email}
               </p>
-              <p className="text-xs border rounded-full max-w-40 px-3 text-muted-foreground mt-1">
+              <p className="text-xs border text-white rounded-full max-w-40 px-3 py-0.5 font-medium mt-1">
                 {account?.isPremium ? "Premium" : "Free"} Plan
               </p>
             </div>
           </div>
 
-          <div className="space-y-3 bg-black">
+          <div className="space-y-3 p-4 bg-black rounded-lg">
             <div>
-              <h3 className="text-sm font-medium mb-1">Message Usage</h3>
-              <p className="text-xs text-muted-foreground">
-                Resets tomorrow at {resetTime}
-              </p>
+              <h3 className="text-sm font-medium mb-6">Message Usage</h3>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Standard</span>
-                <span className="font-medium">
-                  {getRemainingCredits()}/{getTotalCredits()}
+                <span className="text-[#F9F8FB]">Standard</span>
+                <span className="font-medium text-[#E7D0DD]">
+                  {usedCredits}/{totalCredits} used
                 </span>
               </div>
               <div className="w-full bg-muted rounded-full h-2">
                 <div
                   className="bg-[#A2014D] h-2 rounded-full transition-all"
-                  style={{
-                    width: `${(getRemainingCredits() / getTotalCredits()) * 100}%`,
-                  }}
+                  style={{ width: `${usagePercentage}%` }}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {getRemainingCredits()} messages remaining
+              <p className="text-sm text-[#E7D0DD]">
+                {remainingCredits} messages remaining
               </p>
             </div>
-            <p className="text-xs text-muted-foreground pt-2">
+            <p className="text-xs text-[#E7D0DD] text-muted-foreground pt-4">
               Each tool call (e.g. search grounding) used in a reply consumes an
               additional standard credit. Models may not always utilize enabled
               tools.
             </p>
           </div>
 
-          <div className="space-y-3 pt-4 bg-black">
-            <h3 className="text-sm font-medium">Keyboard Shortcuts</h3>
-            <div className="space-y-2 text-sm">
+          <div className="space-y-1 p-4 bg-[#0B080B] rounded-lg">
+            <h3 className="text-sm text-[#F9F8FB] font-semibold">
+              Keyboard Shortcuts
+            </h3>
+
+            <div className="space-y-4 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Search</span>
-                <kbd className="px-2 py-1 text-xs font-semibold bg-muted rounded border">
-                  ⌘ K
-                </kbd>
+                <span className="text-[#F9F8FB] font-medium">Search</span>
+                <div className="flex gap-1">
+                  <kbd className="flex justify-center items-center px-2 py-1.5 text-xs font-medium rounded bg-[#21141E]">
+                    <Command size={11} />
+                  </kbd>
+                  <kbd className="px-2.5 py-1.5 text-xs font-medium rounded bg-[#21141E]">
+                    K
+                  </kbd>
+                </div>
               </div>
+
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">New Chat</span>
-                <kbd className="px-2 py-1 text-xs font-semibold bg-muted rounded border">
-                  ⌘ ⇧ O
-                </kbd>
+                <span className="text-[#F9F8FB] font-medium">New Chat</span>
+                <div className="flex gap-1">
+                  <kbd className="flex justify-center items-center px-2 py-1.5 text-xs font-medium rounded bg-[#21141E]">
+                    <Command size={11} />
+                  </kbd>
+                  <kbd className="px-1.5 py-1.5 text-xs font-semibold rounded bg-[#21141E]">
+                    <ArrowBigUp size={15} />
+                  </kbd>
+                  <kbd className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#21141E]">
+                    O
+                  </kbd>
+                </div>
               </div>
+
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Toggle Sidebar</span>
-                <kbd className="px-2 py-1 text-xs font-semibold bg-muted rounded border">
-                  ⌘ B
-                </kbd>
+                <span className="text-[#F9F8FB] font-medium">
+                  Toggle Sidebar
+                </span>
+                <div className="flex gap-1">
+                  <kbd className="flex justify-center items-center px-2 py-1.5 text-xs font-medium rounded bg-[#21141E]">
+                    <Command size={11} />
+                  </kbd>
+                  <kbd className="px-2.5 py-1.5 text-xs font-semibold rounded  bg-[#21141E]">
+                    B
+                  </kbd>
+                </div>
               </div>
+
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Open Model Picker</span>
-                <kbd className="px-2 py-1 text-xs font-semibold bg-muted rounded border">
-                  ⌘ /
-                </kbd>
+                <span className="text-[#F9F8FB] font-medium">
+                  Open Model Picker
+                </span>
+                <div className="flex gap-1">
+                  <kbd className="flex justify-center items-center px-2 py-1.5 text-xs font-medium rounded bg-[#21141E]">
+                    <Command size={11} />
+                  </kbd>
+                  <kbd className="px-2.5 py-1.5 text-xs font-semibold rounded  bg-[#21141E]">
+                    /
+                  </kbd>
+                </div>
               </div>
+
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">
+                <span className="text-[#F9F8FB] font-medium">
                   Delete Current Chat
                 </span>
-                <kbd className="px-2 py-1 text-xs font-semibold bg-muted rounded border">
-                  ⌘ ⇧ ⌫
-                </kbd>
+                <div className="flex gap-1">
+                  <kbd className="flex justify-center items-center px-2 py-1.5 text-xs font-medium rounded bg-[#21141E]">
+                    <Command size={11} />
+                  </kbd>
+                  <kbd className="px-1.5 py-1.5 text-xs font-semibold rounded bg-[#21141E]">
+                    <ArrowBigUp size={15} />
+                  </kbd>
+                  <kbd className="px-2 py-1.5 text-xs font-semibold rounded  bg-[#21141E]">
+                    <Delete size={14} />
+                  </kbd>
+                </div>
               </div>
             </div>
           </div>
@@ -262,7 +286,7 @@ export default function Settings() {
 
         <div className="flex-1 flex flex-col">
           <div className="flex flex-col">
-            <nav className="max-w-2xl flex  p-4 space-y-1">
+            <nav className="max-w-2xl bg-red-500 flex p-1 space-y-1">
               <button
                 onClick={() => setActiveTab("account")}
                 className={cn(
@@ -313,33 +337,117 @@ export default function Settings() {
               </button>
             </nav>
 
-            <div className="flex-1 p-6">
+            <div className="flex bg-red-700">
               {activeTab === "account" && (
                 <div className="space-y-4">
-                  <h2 className="text-lg font-semibold">Account</h2>
                   {account && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm text-muted-foreground">
-                          Email
-                        </label>
-                        <p className="font-medium">{account.email}</p>
+                    <div className="relative max-w-5xl mx-auto px-6 py-16 space-y-20">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <h1 className="text-3xl font-semibold">
+                          Upgrade to Pro
+                        </h1>
+                        <div className="text-2xl font-semibold">
+                          $8
+                          <span className="text-sm text-gray-400 font-normal">
+                            /month
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-sm text-muted-foreground">
-                          Name
-                        </label>
-                        <p className="font-medium">
-                          {account.name || "Not set"}
+
+                      {/* Feature cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-3">
+                          <div className="text-pink-500 text-2xl">🚀</div>
+                          <h3 className="font-semibold">
+                            Access to All Models
+                          </h3>
+                          <p className="text-sm text-gray-400">
+                            Get access to our full suite of models including
+                            Claude, o3-mini-high, and more!
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-3">
+                          <div className="text-pink-500 text-2xl">✨</div>
+                          <h3 className="font-semibold">Generous Limits</h3>
+                          <p className="text-sm text-gray-400">
+                            Receive{" "}
+                            <span className="font-medium text-white">1500</span>{" "}
+                            standard credits per month, plus{" "}
+                            <span className="font-medium text-white">100</span>{" "}
+                            premium credits.
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-3">
+                          <div className="text-pink-500 text-2xl">🎧</div>
+                          <h3 className="font-semibold">Priority Support</h3>
+                          <p className="text-sm text-gray-400">
+                            Get faster responses and dedicated assistance from
+                            the T3 team whenever you need help!
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* CTA */}
+                      <div className="space-y-4">
+                        <button className="px-6 py-3 rounded-lg bg-pink-700 hover:bg-pink-600 transition font-medium">
+                          Upgrade Now
+                        </button>
+
+                        <p className="text-sm text-gray-400 max-w-3xl">
+                          * Premium credits are used for models marked with a
+                          gem icon in the model selector. This includes, among
+                          others, Claude Sonnet, GPT-5 (Reasoning), Grok 3/4,
+                          Image Generation models, and Gemini 2.5 Pro.
+                          Additional Premium credits can be purchased separately
+                          for $8 per 100.{" "}
+                          <span className="text-pink-500 hover:underline cursor-pointer">
+                            See all premium models
+                          </span>
                         </p>
                       </div>
-                      <div>
-                        <label className="text-sm text-muted-foreground">
-                          Email Verified
-                        </label>
-                        <p className="font-medium">
-                          {account.isEmailVerified ? "Yes" : "No"}
-                        </p>
+
+                      {/* Billing Preferences */}
+                      <div className="space-y-6">
+                        <h2 className="text-2xl font-semibold">
+                          Billing Preferences
+                        </h2>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Email me receipts</p>
+                            <p className="text-sm text-gray-400">
+                              Send receipts to your account email when a payment
+                              succeeds.
+                            </p>
+                          </div>
+
+                          {/* Toggle */}
+                          <div className="w-12 h-6 bg-white/20 rounded-full relative">
+                            <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Security Options */}
+                      <div className="space-y-6">
+                        <h2 className="text-2xl font-semibold">
+                          Security Options
+                        </h2>
+
+                        <div className="space-y-3">
+                          <p className="font-medium">Devices</p>
+                          <p className="text-sm text-gray-400 max-w-xl">
+                            Manage and sign out from other devices that are
+                            currently logged in to your account.
+                          </p>
+
+                          <button className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition">
+                            View Devices
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
