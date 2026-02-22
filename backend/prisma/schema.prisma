@@ -9,19 +9,21 @@ datasource db {
 
 model User {
   id                          String            @id @default(uuid())
-  email                       String            @unique
   name                        String?
-  profilePicture              String?           @map("profile_picture")
-  isEmailVerified             Boolean           @default(false) @map("is_email_verified")
+  email                       String            @unique
   credits                     Int               @default(5)
+  profilePicture              String?           @map("profile_picture")
   isPremium                   Boolean           @default(false) @map("is_premium")
   isByokEnabled               Boolean           @default(false) @map("is_byok_enabled")
+  isEmailVerified             Boolean           @default(false) @map("is_email_verified")
   isBillingPreferencesEnabled Boolean           @default(false) @map("is_billing_preferences_enabled")
   lastDailyReset              DateTime?         @map("last_daily_reset")
   lastMonthlyReset            DateTime?         @map("last_monthly_reset")
-  profiles                    Profile[]
-  openRouterApiKey            OpenRouterApiKey?
+  activeProfileId             String?           @map("active_profile_id")
+  activeProfile               Profile?          @relation("ActiveProfile", fields: [activeProfileId], references: [id])
+  profiles                    Profile[]         @relation("UserProfiles")
   paymentHistory              Payment[]
+  openRouterApiKey            OpenRouterApiKey?
   createdAt                   DateTime          @default(now()) @map("created_at")
   updatedAt                   DateTime          @updatedAt @map("updated_at")
 
@@ -30,9 +32,11 @@ model User {
 
 model Profile {
   id                  String               @id @default(uuid())
-  profileName         String               @map("profile_name")
   userId              String               @map("user_id")
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileName         String               @map("profile_name")
+  user                User                 @relation("UserProfiles", fields: [userId], references: [id], onDelete: Cascade)
+  activeForUsers      User[]               @relation("ActiveProfile")
+  isDefault           Boolean              @default(false)
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   conversations       Conversation[]
