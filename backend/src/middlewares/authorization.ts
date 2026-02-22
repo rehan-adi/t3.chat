@@ -14,12 +14,12 @@ export const authorization = async (c: Context, next: Next) => {
           success: false,
           message: "Unauthorized",
         },
-        401
+        401,
       );
     }
 
     const decoded = jwt.verify(token, config.JWT_SECRET) as {
-      id: 1;
+      id: string;
       email: string;
     };
 
@@ -27,12 +27,11 @@ export const authorization = async (c: Context, next: Next) => {
 
     await next();
   } catch (error) {
-    console.error(error);
     logger.error(
       {
         error,
       },
-      "JWT verification failed on authorization middleware"
+      "JWT verification failed on authorization middleware",
     );
     return c.json(
       {
@@ -40,7 +39,7 @@ export const authorization = async (c: Context, next: Next) => {
         message: "Invalid or expired token",
         error: error,
       },
-      401
+      401,
     );
   }
 };
