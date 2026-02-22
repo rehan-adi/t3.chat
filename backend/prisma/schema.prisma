@@ -8,35 +8,35 @@ datasource db {
 }
 
 model User {
-  id                          String               @id @default(uuid())
-  email                       String               @unique
+  id                          String            @id @default(uuid())
+  email                       String            @unique
   name                        String?
-  profilePicture              String?              @map("profile_picture")
-  isEmailVerified             Boolean              @default(false) @map("is_email_verified")
-  credits                     Int                  @default(5)
-  isPremium                   Boolean              @default(false) @map("is_premium")
-  isByokEnabled               Boolean              @default(false) @map("is_byok_enabled")
-  isBillingPreferencesEnabled Boolean              @default(false) @map("is_billing_preferences_enabled")
-  lastDailyReset              DateTime?            @map("last_daily_reset")
-  lastMonthlyReset            DateTime?            @map("last_monthly_reset")
+  profilePicture              String?           @map("profile_picture")
+  isEmailVerified             Boolean           @default(false) @map("is_email_verified")
+  credits                     Int               @default(5)
+  isPremium                   Boolean           @default(false) @map("is_premium")
+  isByokEnabled               Boolean           @default(false) @map("is_byok_enabled")
+  isBillingPreferencesEnabled Boolean           @default(false) @map("is_billing_preferences_enabled")
+  lastDailyReset              DateTime?         @map("last_daily_reset")
+  lastMonthlyReset            DateTime?         @map("last_monthly_reset")
   profiles                    Profile[]
   openRouterApiKey            OpenRouterApiKey?
-  systemCustomizations        SystemCustomization?
   paymentHistory              Payment[]
-  createdAt                   DateTime             @default(now()) @map("created_at")
-  updatedAt                   DateTime             @updatedAt @map("updated_at")
+  createdAt                   DateTime          @default(now()) @map("created_at")
+  updatedAt                   DateTime          @updatedAt @map("updated_at")
 
   @@map("users")
 }
 
 model Profile {
-  id            String         @id @default(uuid())
-  profileName   String         @map("profile_name")
-  userId        String         @map("user_id")
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  conversations Conversation[]
+  id                  String               @id @default(uuid())
+  profileName         String               @map("profile_name")
+  userId              String               @map("user_id")
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  conversations       Conversation[]
+  systemCustomization SystemCustomization?
 
   @@unique([userId, profileName])
   @@index([userId])
@@ -79,8 +79,8 @@ model SystemCustomization {
   systemName   String?  @map("system_name")
   systemPrompt String   @map("system_prompt")
   systemTrait  Trait[]
-  userId       String   @unique @map("user_id")
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId    String   @unique @map("profile_id")
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
