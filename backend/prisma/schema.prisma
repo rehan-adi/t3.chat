@@ -8,50 +8,66 @@ datasource db {
 }
 
 model User {
-  id                         String               @id @default(uuid())
-  email                      String               @unique
-  name                       String?
-  profilePicture             String?
-  isEmailVerified            Boolean              @default(false)
-  credits                    Int                  @default(5)
-  isPremium                  Boolean              @default(false)
-  byokEnable                 Boolean              @default(false)
-  isbillingPreferencesEnable Boolean              @default(false)
-  lastDailyReset             DateTime?
-  lastResetMonth             DateTime?
-  conversation               Conversation[]
-  openRouterApiKey           OpenRouterApiKey?
-  systemCustomizations       SystemCustomization?
-  paymentHistory             Payment[]
-  createdAt                  DateTime             @default(now())
-  updatedAt                  DateTime             @updatedAt
+  id                          String               @id @default(uuid())
+  email                       String               @unique
+  name                        String?
+  profilePicture              String?              @map("profile_picture")
+  isEmailVerified             Boolean              @default(false) @map("is_email_verified")
+  credits                     Int                  @default(5)
+  isPremium                   Boolean              @default(false) @map("is_premium")
+  isByokEnabled               Boolean              @default(false) @map("is_byok_enabled")
+  isBillingPreferencesEnabled Boolean              @default(false) @map("is_billing_preferences_enabled")
+  lastDailyReset              DateTime?            @map("last_daily_reset")
+  lastMonthlyReset            DateTime?            @map("last_monthly_reset")
+  profiles                    Profile[]
+  openRouterApiKey            OpenRouterApiKey?
+  systemCustomizations        SystemCustomization?
+  paymentHistory              Payment[]
+  createdAt                   DateTime             @default(now()) @map("created_at")
+  updatedAt                   DateTime             @updatedAt @map("updated_at")
 
   @@map("users")
 }
 
-model Conversation {
-  id        String    @id @default(uuid())
-  title     String?
-  summary   String?
-  pinned    Boolean   @default(false)
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+model Profile {
+  id            String         @id @default(uuid())
+  profileName   String         @map("profile_name")
+  userId        String         @map("user_id")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  conversations Conversation[]
 
+  @@unique([userId, profileName])
   @@index([userId])
+  @@map("profiles")
+}
+
+model Conversation {
+  id              String    @id @default(uuid())
+  title           String?
+  summary         String?
+  isPinned        Boolean   @default(false) @map("is_pinned")
+  profileId       String    @map("profile_id")
+  profile         Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  expiresAt       DateTime? @map("expires_at")
+  isTemporaryChat Boolean   @default(false) @map("is_temporary_chat")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
   @@map("conversations")
 }
 
 model Message {
   id             String       @id @default(uuid())
-  conversationId String
+  conversationId String       @map("conversation_id")
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   role           Role
   response       String
-  modelName      String?
-  createdAt      DateTime     @default(now())
+  modelName      String?      @map("model_name")
+  createdAt      DateTime     @default(now()) @map("created_at")
 
   @@index([conversationId])
   @@map("messages")
@@ -59,14 +75,14 @@ model Message {
 
 model SystemCustomization {
   id           String   @id @default(uuid())
-  systemName   String?
-  systemBio    String?
-  systemPrompt String
+  systemBio    String?  @map("system_bio")
+  systemName   String?  @map("system_name")
+  systemPrompt String   @map("system_prompt")
   systemTrait  Trait[]
-  userId       String   @unique
+  userId       String   @unique @map("user_id")
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("system_customizations")
 }
@@ -74,28 +90,28 @@ model SystemCustomization {
 model OpenRouterApiKey {
   id        String   @id @default(uuid())
   key       String
-  userId    String   @unique
+  userId    String   @unique @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("open_router_api_key")
 }
 
 model Payment {
   id                String    @id @default(uuid())
-  orderId           String    @unique
-  paymentId         String?
-  paymentSessionId  String?
-  paymentEventTime  DateTime?
+  orderId           String    @unique @map("order_id")
+  paymentId         String?   @map("payment_id")
+  paymentSessionId  String?   @map("payment_session_id")
+  paymentEventTime  DateTime? @map("payment_event_time")
   amount            Int
   currency          String
   status            Status
-  userId            String
+  userId            String    @map("user_id")
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rawWebhookPayload Json?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  rawWebhookPayload Json?     @map("raw_webhook_payload")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@index([userId])
   @@map("payments")
