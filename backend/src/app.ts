@@ -4,6 +4,7 @@ import { register } from "@/lib/metrics";
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { requestLogger } from "@/middlewares/logger";
+import { authorization } from "@/middlewares/authorization";
 
 import { authRoute } from "@/routes/auth.route";
 import { modelRoute } from "@/routes/model.route";
@@ -46,33 +47,38 @@ app.get("/metrics", async () => {
 });
 
 /**
- * this route is for generating fucking presigned url,
+ * this route is for generating presigned url,
  */
 
-app.post("/api/v1/generate/presigned-url", async (c: Context) => {
-  const body = await c.req.json();
+app.post(
+  "/api/v1/generate/presigned-url",
+  authorization,
+  async (c: Context) => {
+    const body = await c.req.json();
 
-  const { fileName, fileType } = body;
+    const { fileName, fileType } = body;
 
-  if (!fileName || !fileType) {
-    return c.json(
-      {
-        success: false,
-        message: "Missing file name or type",
-      },
-      400,
+    if (!fileName || !fileType) {
+      return c.json(
+        {
+          success: false,
+          message: "Missing file name or type",
+        },
+        400,
+      );
+    }
+
+    const { url, publicUrl, key } = await generatePresignedUrl(
+      fileName,
+      fileType,
     );
-  }
 
-  const { url, publicUrl, key } = await generatePresignedUrl(
-    fileName,
-    fileType,
-  );
-  return c.json({
-    success: true,
-    message: "Presinges url generated",
-    url,
-    publicUrl,
-    key,
-  });
-});
+    return c.json({
+      success: true,
+      message: "Presinges url generated",
+      url,
+      publicUrl,
+      key,
+    });
+  },
+);
