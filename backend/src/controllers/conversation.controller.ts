@@ -11,9 +11,9 @@ import { userProfilePrompt } from "@/utils/userProfilePrompt";
 import { updateConversationSchema } from "@/validations/conversation.validation";
 
 /**
- * @desc getAllConversation fetch all conversations for the authenticated user along with basic profile info
- * @param c Hono Context
- * @returns Json Respons with data
+ * @desc Retrieve data for the authenticated user.
+ * Returns the user's basic information, all associated profiles,
+ * the currently active profile, and all conversations under that profile
  */
 
 export const getAllConversation = async (c: Context) => {
@@ -23,31 +23,46 @@ export const getAllConversation = async (c: Context) => {
   try {
     const userId = c.get("user").id;
 
-    const userWithConversation = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
+    const userWithProfileInfoAndConversations = await prisma.user.findUnique({
+      where: { id: userId },
       select: {
         id: true,
         name: true,
         isPremium: true,
         profilePicture: true,
-        conversation: {
+        activeProfileId: true,
+        profiles: {
           select: {
             id: true,
-            title: true,
-            pinned: true,
+            profileName: true,
+            isDefault: true, // can be removed
             createdAt: true,
-            updatedAt: true,
           },
-          orderBy: {
-            updatedAt: "desc",
+          orderBy: { createdAt: "asc" },
+        },
+        activeProfile: {
+          select: {
+            id: true,
+            profileName: true,
+            conversations: {
+              where: {
+                isTemporaryChat: false,
+              },
+              select: {
+                id: true,
+                title: true,
+                isPinned: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+              orderBy: { updatedAt: "desc" },
+            },
           },
         },
       },
     });
 
-    if (!userWithConversation) {
+    if (!userWithProfileInfoAndConversations) {
       return c.json(
         {
           success: false,
@@ -57,10 +72,20 @@ export const getAllConversation = async (c: Context) => {
       );
     }
 
+    if (!userWithProfileInfoAndConversations.activeProfile) {
+      return c.json(
+        {
+          success: false,
+          message: "Active profile not set",
+        },
+        400,
+      );
+    }
+
     logger.info(
       {
-        ip: ip,
-        requestId: requestId,
+        ip,
+        requestId,
         userId: userId,
       },
       "Data fetched successfully",
@@ -72,18 +97,33 @@ export const getAllConversation = async (c: Context) => {
         message: "Data fetched successfully",
         data: {
           user: {
-            id: userWithConversation.id,
-            name: userWithConversation.name,
-            isPremium: userWithConversation.isPremium,
-            profilePicture: userWithConversation.profilePicture,
+            id: userWithProfileInfoAndConversations.id,
+            name: userWithProfileInfoAndConversations.name,
+            isPremium: userWithProfileInfoAndConversations.isPremium,
+            profilePicture: userWithProfileInfoAndConversations.profilePicture,
           },
-          conversations: userWithConversation.conversation,
+          profiles: userWithProfileInfoAndConversations.profiles,
+          activeProfile: {
+            id: userWithProfileInfoAndConversations.activeProfile.id,
+            profileName:
+              userWithProfileInfoAndConversations.activeProfile.profileName,
+          },
+          conversations:
+            userWithProfileInfoAndConversations.activeProfile.conversations,
         },
       },
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in getAllConversation controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getAllConversation controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -96,9 +136,9 @@ export const getAllConversation = async (c: Context) => {
 };
 
 /**
- * @desc getConversationById fetch a single conversation and its messages by conversationId
- * @param c Hono Context
- * @returns Json Respons with data
+ * @desc Retrieve a specific conversation along with all its messages.
+ * Access is restricted to conversations that belong to a profile
+ * owned by the authenticated user.
  */
 
 export const getConversationById = async (c: Context) => {
@@ -109,26 +149,12 @@ export const getConversationById = async (c: Context) => {
     const userId = c.get("user").id;
     const conversationId = c.req.param("conversationId");
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!user) {
-      return c.json(
-        {
-          success: false,
-          message: "User not found",
-        },
-        404,
-      );
-    }
-
     const conversation = await prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        userId,
+        profile: {
+          userId: userId,
+        },
       },
       include: {
         messages: {
@@ -152,7 +178,6 @@ export const getConversationById = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
         conversationId: conversationId,
       },
       "Fetched conversation successfully",
@@ -167,7 +192,15 @@ export const getConversationById = async (c: Context) => {
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in getConversationById controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getConversationById controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -180,9 +213,9 @@ export const getConversationById = async (c: Context) => {
 };
 
 /**
- * @desc updateConversationPin pin and unpin the Conversation
- * @param c Hono Context
- * @returns Json Respons with data
+ * @desc Update the pinned status of a conversation.
+ * Ensures the conversation belongs to a profile owned by
+ * the authenticated user before applying the change.
  */
 
 export const updateConversationPin = async (c: Context) => {
@@ -191,25 +224,31 @@ export const updateConversationPin = async (c: Context) => {
 
   try {
     const userId = c.get("user").id;
+    const conversationId = c.req.param("conversationId");
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const body = await c.req.json<{ isPinned: boolean }>();
 
-    if (!user) {
+    if (typeof body.isPinned !== "boolean") {
       return c.json(
         {
           success: false,
-          message: "User not found",
+          message: "isPinned value must be boolean",
         },
-        404,
+        400,
       );
     }
 
-    const conversationId = c.req.param("conversationId");
-
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, userId },
+      where: {
+        id: conversationId,
+        profile: {
+          userId: userId,
+        },
+      },
+      select: {
+        id: true,
+        isPinned: true,
+      },
     });
 
     if (!conversation) {
@@ -222,21 +261,13 @@ export const updateConversationPin = async (c: Context) => {
       );
     }
 
-    const body = await c.req.json<{ pinned: boolean }>();
-
-    if (typeof body.pinned !== "boolean") {
-      return c.json(
-        {
-          success: false,
-          message: "Pinned value must be boolean",
-        },
-        400,
-      );
-    }
-
-    const update = await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { pinned: body.pinned },
+    const updatedConversation = await prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+      data: {
+        isPinned: body.isPinned,
+      },
     });
 
     logger.info(
@@ -244,24 +275,31 @@ export const updateConversationPin = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
         conversationId: conversationId,
       },
-      `Conversation ${body.pinned ? "pinned" : "unpinned"} successfully`,
+      `Conversation ${body.isPinned ? "pinned" : "unpinned"} successfully`,
     );
 
     return c.json(
       {
         success: true,
         message: `Conversation ${
-          body.pinned ? "pinned" : "unpinned"
+          body.isPinned ? "pinned" : "unpinned"
         } successfully`,
-        data: update,
+        data: updatedConversation,
       },
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in updateConversationPin controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "updateConversationPin controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -274,9 +312,9 @@ export const updateConversationPin = async (c: Context) => {
 };
 
 /**
- * @desc updateConversation updates Title of a conversation by conversationId.
- * @param c Hono Context
- * @returns Json Respons with data
+ * @desc Update the title of a conversation.
+ * Validates input and ensures the conversation belongs
+ * to the authenticated user's profile before updating.
  */
 
 export const updateConversation = async (c: Context) => {
@@ -285,25 +323,31 @@ export const updateConversation = async (c: Context) => {
 
   try {
     const userId = c.get("user").id;
+    const conversationId = c.req.param("conversationId");
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const body = await c.req.json<{ title: string }>();
 
-    if (!user) {
+    const { success, data } = updateConversationSchema.safeParse(body);
+
+    if (!success) {
+      logger.warn({ ip, requestId }, "Title validation failed");
       return c.json(
         {
           success: false,
-          message: "User not found",
+          message: "Title validation failed",
         },
-        404,
+        400,
       );
     }
 
-    const conversationId = c.req.param("conversationId");
-
     const conversation = await prisma.conversation.findFirst({
-      where: { id: conversationId, userId },
+      where: {
+        id: conversationId,
+        profile: {
+          userId: userId,
+        },
+      },
+      select: { id: true },
     });
 
     if (!conversation) {
@@ -316,26 +360,12 @@ export const updateConversation = async (c: Context) => {
       );
     }
 
-    const body = await c.req.json<{ title: string }>();
-
-    const { success, data, error } = updateConversationSchema.safeParse(body);
-
-    if (!success) {
-      return c.json(
-        {
-          success: false,
-          message: error.message,
-        },
-        400,
-      );
-    }
-
     const updatedConversation = await prisma.conversation.update({
       where: {
         id: conversationId,
       },
       data: {
-        title: data?.title,
+        title: data.title,
       },
     });
 
@@ -344,7 +374,6 @@ export const updateConversation = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
         conversationId: conversationId,
       },
       "Conversation title updated successfully",
@@ -359,7 +388,15 @@ export const updateConversation = async (c: Context) => {
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in updateConversation controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "updateConversation controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -372,9 +409,9 @@ export const updateConversation = async (c: Context) => {
 };
 
 /**
- * @desc deleteConversation delete users one conversation using conversationId.
- * @param c Hono Context
- * @returns Json Respons
+ * @desc Permanently delete a conversation.
+ * Ensures the conversation belongs to a profile owned
+ * by the authenticated user before removal.
  */
 
 export const deleteConversation = async (c: Context) => {
@@ -383,29 +420,14 @@ export const deleteConversation = async (c: Context) => {
 
   try {
     const userId = c.get("user").id;
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!user) {
-      return c.json(
-        {
-          success: false,
-          message: "User not found",
-        },
-        404,
-      );
-    }
-
     const conversationId = c.req.param("conversationId");
 
     const conversation = await prisma.conversation.findFirst({
       where: {
         id: conversationId,
-        userId,
+        profile: {
+          userId: userId,
+        },
       },
     });
 
@@ -430,7 +452,7 @@ export const deleteConversation = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
+        conversationId: conversationId,
       },
       "Conversation deleted successfully",
     );
@@ -443,7 +465,15 @@ export const deleteConversation = async (c: Context) => {
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in deleteConversation controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "deleteConversation controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -456,22 +486,35 @@ export const deleteConversation = async (c: Context) => {
 };
 
 /**
- * @desc conversationChatController do nothing, just call LLM api that's it 😇.
- * @param c Hono Context
- * @returns Stream Response
+ * @desc Process a chat message for a conversation and stream the AI response.
+ *
+ * - Validates model and billing eligibility (BYOK, Premium, or Credits).
+ * - Creates a new conversation if none is provided.
+ * - Verifies ownership under the user's active profile.
+ * - Persists user and AI messages.
+ * - Injects profile customization and conversation memory.
+ * - Maintains rolling summary and deducts credits when applicable.
  */
 
 export const conversationChatController = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
   let id = 0;
 
   try {
     const body = await c.req.json<{
       conversationId?: string;
-      prompt: string;
       model: string;
+      prompt: string;
+      isTemporaryChatEnabled: boolean;
     }>();
 
-    const { conversationId, prompt, model: modelId } = body;
+    const {
+      conversationId,
+      model: modelId,
+      prompt,
+      isTemporaryChatEnabled,
+    } = body;
 
     const model = MODELS.find((m) => m.id === modelId);
 
@@ -488,8 +531,13 @@ export const conversationChatController = async (c: Context) => {
     const userId = c.get("user").id;
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { openRouterApiKey: true },
+      where: {
+        id: userId,
+      },
+      include: {
+        openRouterApiKey: true,
+        activeProfile: true,
+      },
     });
 
     if (!user) {
@@ -502,10 +550,20 @@ export const conversationChatController = async (c: Context) => {
       );
     }
 
+    if (!user.activeProfileId) {
+      return c.json(
+        {
+          success: false,
+          message: "Active profile not set",
+        },
+        400,
+      );
+    }
+
     let apiKeyToUse = config.OPENROUTER_API_KEY;
     let billingMode: "BYOK" | "PREMIUM" | "CREDITS" = "CREDITS";
 
-    if (user.byokEnable && user.openRouterApiKey?.key) {
+    if (user.isByokEnabled && user.openRouterApiKey?.key) {
       apiKeyToUse = user.openRouterApiKey.key;
       billingMode = "BYOK";
     } else if (user.isPremium) {
@@ -526,20 +584,35 @@ export const conversationChatController = async (c: Context) => {
     let finalConversationId = conversationId;
 
     if (!finalConversationId) {
+      let expiresAt = null;
+
+      if (isTemporaryChatEnabled) {
+        const now = new Date();
+        expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+      }
+
       const newConv = await prisma.conversation.create({
         data: {
-          userId,
+          profileId: user.activeProfileId,
           title: prompt.slice(0, 20) + "...",
+          isTemporaryChat: isTemporaryChatEnabled,
+          expiresAt,
         },
       });
       finalConversationId = newConv.id;
     }
 
     const conversation = await prisma.conversation.findUnique({
-      where: { id: finalConversationId },
+      where: {
+        id: finalConversationId,
+      },
+      select: {
+        profileId: true,
+        summary: true,
+      },
     });
 
-    if (!conversation || conversation.userId !== userId) {
+    if (!conversation || conversation.profileId !== user.activeProfileId) {
       return c.json(
         {
           success: false,
@@ -550,8 +623,12 @@ export const conversationChatController = async (c: Context) => {
     }
 
     const recentMessages = await prisma.message.findMany({
-      where: { conversationId: finalConversationId },
-      orderBy: { createdAt: "asc" },
+      where: {
+        conversationId: finalConversationId,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
       take: 5,
     });
 
@@ -566,13 +643,15 @@ export const conversationChatController = async (c: Context) => {
 
     let profile = null;
 
-    const cached = await redisClient.get(`user:customization:${userId}`);
+    const cached = await redisClient.get(
+      `profile:customization:${user.activeProfileId}`,
+    );
 
     if (cached) {
       profile = JSON.parse(cached);
     } else {
       profile = await prisma.systemCustomization.findFirst({
-        where: { userId },
+        where: { profileId: user.activeProfileId! },
         select: {
           systemName: true,
           systemBio: true,
@@ -583,10 +662,10 @@ export const conversationChatController = async (c: Context) => {
 
       if (profile) {
         await redisClient.set(
-          `user:customization:${userId}`,
+          `profile:customization:${user.activeProfileId}`,
           JSON.stringify(profile),
           "EX",
-          3600,
+          24 * 3600,
         );
       }
     }
@@ -681,7 +760,7 @@ export const conversationChatController = async (c: Context) => {
         },
       });
 
-      if (messageCount >= 3) {
+      if (messageCount >= 8) {
         const oldMessages = await prisma.message.findMany({
           where: {
             conversationId: finalConversationId,
@@ -708,13 +787,13 @@ Existing summary:
 ${conversation.summary || "None"}
 
 New messages:
-${recentMessages.map((m) => `${m.role}: ${m.response}`).join("\n")}
+${oldMessages.map((m) => `${m.role}: ${m.response}`).join("\n")}
 `,
             },
           ];
 
           const summaryResponse = await openRouterClient.chat.send({
-            model: "mistralai/devstral-2512:free",
+            model: config.CONVERSATION_SUMMARY_MODEL,
             messages: summaryPrompt,
             stream: false,
           });
@@ -762,7 +841,15 @@ ${recentMessages.map((m) => `${m.role}: ${m.response}`).join("\n")}
       });
     });
   } catch (error) {
-    logger.error({ error }, "Error in conversationChatController controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "conversationChatController controller failed",
+    );
     return c.json(
       {
         success: false,

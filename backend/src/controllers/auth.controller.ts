@@ -15,10 +15,10 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { sendOtpEmail, sendWelcomeEmail } from "@/utils/sendEmail";
 
 /**
- * @desc requestOtp sends an OTP to users email.
- * If the user is new in the system, a new record is created in db and OTP is sent.
- * @param c Hono Context
- * @returns Json response
+ * @desc Request a one time password (OTP) for authentication.
+ * If the user does not exist, a new user and default profile are created.
+ * Generates a 6-digit OTP, stores it temporarily in Redis with expiration,
+ * and sends it to the user's email.
  */
 
 export const requestOtp = async (c: Context) => {
@@ -31,19 +31,13 @@ export const requestOtp = async (c: Context) => {
     const { success, data } = requestOtpSchema.safeParse(body);
 
     if (!success) {
-      logger.warn(
-        {
-          ip,
-          requestId,
-        },
-        "Email validation failed"
-      );
+      logger.warn({ ip, requestId }, "Email validation failed");
       return c.json(
         {
           success: false,
           message: "Email validation error",
         },
-        400
+        400,
       );
     }
 
@@ -58,41 +52,62 @@ export const requestOtp = async (c: Context) => {
     if (!user) {
       const randomId = generateRandomId();
 
-      user = await prisma.user.create({
-        data: {
-          email: data.email,
-          name: `User-${randomId}`,
-        },
+      user = await prisma.$transaction(async (tx) => {
+        const createdUser = await tx.user.create({
+          data: {
+            email: data.email,
+            name: `User-${randomId}`,
+          },
+        });
+
+        const profile = await tx.profile.create({
+          data: {
+            isDefault: true,
+            userId: createdUser.id,
+            profileName: createdUser.name!,
+          },
+        });
+
+        await tx.user.update({
+          where: {
+            id: createdUser.id,
+          },
+          data: {
+            activeProfileId: profile.id,
+          },
+        });
+
+        return createdUser;
       });
+
       statusCode = 201;
     }
 
     const otp = randomInt(100000, 1000000).toString();
 
-    await redisClient.set(`user:otp:${data.email}`, otp, "EX", 5 * 60);
+    await redisClient.set(`user:otp:${user.email}`, otp, "EX", 5 * 60);
 
     if (config.NODE_ENV === "development") {
       logger.info({ otp: otp }, ` otp for user ${user.email}`);
     } else {
       try {
-        await sendOtpEmail(data.email, otp);
+        await sendOtpEmail(user.email, otp);
       } catch (error) {
         logger.error(
           {
             ip,
             requestId,
             userId: user.id,
-            email: user.email,
             error,
           },
-          "Failed to send OTP to user's email"
+          "Failed to send OTP to user's email",
         );
         return c.json(
           {
             success: false,
             message: "Failed to send OTP",
           },
-          500
+          500,
         );
       }
     }
@@ -102,9 +117,8 @@ export const requestOtp = async (c: Context) => {
         ip,
         requestId,
         userId: user.id,
-        userEmail: user.email,
       },
-      "OTP generated and sent successfully"
+      "OTP generated and sent successfully",
     );
 
     return c.json(
@@ -112,27 +126,34 @@ export const requestOtp = async (c: Context) => {
         success: true,
         message: "OTP sent successfully to your email",
       },
-      statusCode
+      statusCode,
     );
   } catch (error) {
-    logger.error({ error }, "Error in requestOtp controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "requestOtp controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
 
 /**
- * @desc verifyOtp verifies the OTP of the user and check if it is expired or incorrect.
- * For new users, it updates isEmailVerified field in users table and sends a welcome email.
- * It then generates a JWT token and sets it in a cookie.
- * @param c Hono Context
- * @returns Json response
+ * @desc Verify the provided OTP and authenticate the user.
+ * Validates the OTP against Redis, marks the email as verified if first-time login,
+ * generates a JWT token, sets it in a secure HTTP-only cookie,
+ * and establishes an authenticated session.
  */
 
 export const verifyOtp = async (c: Context) => {
@@ -145,19 +166,13 @@ export const verifyOtp = async (c: Context) => {
     const { success, data } = verifyOtpSchema.safeParse(body);
 
     if (!success) {
-      logger.warn(
-        {
-          ip,
-          requestId,
-        },
-        "Email or OTP validation failed"
-      );
+      logger.warn({ ip, requestId }, "Email or OTP validation failed");
       return c.json(
         {
           success: false,
           message: "Email or OTP validation failed",
         },
-        400
+        400,
       );
     }
 
@@ -173,11 +188,11 @@ export const verifyOtp = async (c: Context) => {
           success: false,
           message: "User not found, please try using different email",
         },
-        404
+        404,
       );
     }
 
-    const otp = await redisClient.get(`user:otp:${data.email}`);
+    const otp = await redisClient.get(`user:otp:${existingUser.email}`);
 
     if (otp === null) {
       return c.json(
@@ -185,7 +200,7 @@ export const verifyOtp = async (c: Context) => {
           success: false,
           message: "OTP is expired, Please try again with a new OTP",
         },
-        400
+        400,
       );
     }
 
@@ -195,7 +210,7 @@ export const verifyOtp = async (c: Context) => {
           success: false,
           message: "OTP is incorrect, Please enter the right OTP",
         },
-        400
+        400,
       );
     }
 
@@ -218,10 +233,9 @@ export const verifyOtp = async (c: Context) => {
               ip,
               requestId,
               userId: existingUser.id,
-              email: existingUser.email,
               error,
             },
-            "Failed to send welcome email"
+            "Failed to send welcome email",
           );
         }
       } else {
@@ -232,7 +246,7 @@ export const verifyOtp = async (c: Context) => {
     const token = jwt.sign(
       { id: existingUser.id, email: existingUser.email },
       config.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     setCookie(c, "token", token, {
@@ -251,9 +265,8 @@ export const verifyOtp = async (c: Context) => {
         ip,
         requestId,
         userId: existingUser.id,
-        userEmail: existingUser.email,
       },
-      "Signed in successfully"
+      "Signed in successfully",
     );
 
     return c.json(
@@ -261,28 +274,38 @@ export const verifyOtp = async (c: Context) => {
         success: true,
         message: "Signed in successfully",
       },
-      200
+      200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in verifyOtp controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "verifyOtp controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
 
 /**
- * @desc logout controller is just clear the cookie nothing else no fucking engeneering here
- * @param c Hono Context
- * @returns Json response
+ * @desc Log out the authenticated user.
+ * Clears the authentication cookie and invalidates the current session on the client.
  */
 
 export const logout = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
   try {
     deleteCookie(c, "token");
     return c.json(
@@ -290,17 +313,25 @@ export const logout = async (c: Context) => {
         success: true,
         message: "You have been logged out successfully.",
       },
-      200
+      200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in logout controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "logout controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };

@@ -37,7 +37,7 @@ export const getAccount = async (c: Context) => {
         isPremium: true,
         profilePicture: true,
         isEmailVerified: true,
-        isbillingPreferencesEnable: true,
+        isBillingPreferencesEnabled: true,
       },
     });
 
@@ -47,7 +47,7 @@ export const getAccount = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -58,7 +58,7 @@ export const getAccount = async (c: Context) => {
         userId: userId,
         userEmail: user.email,
       },
-      "Account details fetched successfully"
+      "Account details fetched successfully",
     );
 
     return c.json(
@@ -67,7 +67,7 @@ export const getAccount = async (c: Context) => {
         message: "Account details fetched successfully",
         data: user,
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in getAccount controller");
@@ -77,7 +77,7 @@ export const getAccount = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV == "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -107,7 +107,7 @@ export const deleteAccount = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -127,7 +127,7 @@ export const deleteAccount = async (c: Context) => {
         requestId,
         userId: user.id,
       },
-      "Account deleted successfully"
+      "Account deleted successfully",
     );
 
     return c.json(
@@ -135,7 +135,7 @@ export const deleteAccount = async (c: Context) => {
         success: true,
         message: "Account deleted successfully",
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in deleteAccount controller");
@@ -145,7 +145,7 @@ export const deleteAccount = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV == "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -171,17 +171,17 @@ export const updateBillingPreference = async (c: Context) => {
           success: false,
           message: "isBillingPreferencesEnabled must be boolean",
         },
-        400
+        400,
       );
     }
 
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { isbillingPreferencesEnable },
+      data: { isBillingPreferencesEnabled: isbillingPreferencesEnable },
       select: {
         id: true,
         email: true,
-        isbillingPreferencesEnable: true,
+        isBillingPreferencesEnabled: true,
       },
     });
 
@@ -193,7 +193,7 @@ export const updateBillingPreference = async (c: Context) => {
         userEmail: user.email,
         isbillingPreferencesEnable,
       },
-      "Billing preference updated"
+      "Billing preference updated",
     );
 
     return c.json(
@@ -201,10 +201,10 @@ export const updateBillingPreference = async (c: Context) => {
         success: true,
         message: "Billing preference updated successfully",
         data: {
-          isBillingPreferencesEnabled: user.isbillingPreferencesEnable,
+          isBillingPreferencesEnabled: user.isBillingPreferencesEnabled,
         },
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in updateBillingPreference controller");
@@ -215,7 +215,7 @@ export const updateBillingPreference = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -256,14 +256,14 @@ export const updateName = async (c: Context) => {
           ip,
           requestId,
         },
-        "Name validation failed"
+        "Name validation failed",
       );
       return c.json(
         {
           success: false,
           message: "Name is invalid, Length should be min 2 to max 10",
         },
-        400
+        400,
       );
     }
 
@@ -283,7 +283,7 @@ export const updateName = async (c: Context) => {
         userId: userId,
         userEmail: user.email,
       },
-      "Name updated successfully"
+      "Name updated successfully",
     );
 
     return c.json(
@@ -291,7 +291,7 @@ export const updateName = async (c: Context) => {
         success: true,
         message: "Name updated successfully",
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in updateName controller");
@@ -301,7 +301,7 @@ export const updateName = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV == "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -328,7 +328,7 @@ export const updateProfilePicture = async (c: Context) => {
           success: false,
           message: "No key provided",
         },
-        400
+        400,
       );
     }
 
@@ -344,14 +344,14 @@ export const updateProfilePicture = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
     if (user?.profilePicture) {
       const oldKey = user.profilePicture?.replace(
         `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
-        ""
+        "",
       );
 
       const command = new DeleteObjectCommand({
@@ -367,7 +367,7 @@ export const updateProfilePicture = async (c: Context) => {
             requestId,
             userId: userId,
           },
-          "User's old profile picture deleted successfully from S3"
+          "User's old profile picture deleted successfully from S3",
         );
       } catch (error) {
         logger.error(
@@ -378,7 +378,7 @@ export const updateProfilePicture = async (c: Context) => {
             userEmail: user.email,
             error,
           },
-          "Error while deleting user's old pfp key from s3"
+          "Error while deleting user's old pfp key from s3",
         );
       }
     }
@@ -394,7 +394,7 @@ export const updateProfilePicture = async (c: Context) => {
         requestId,
         userId: userId,
       },
-      "Profile picture updated successfully"
+      "Profile picture updated successfully",
     );
 
     return c.json({
@@ -409,7 +409,7 @@ export const updateProfilePicture = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV == "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -431,9 +431,13 @@ export const getCustomization = async (c: Context) => {
       where: {
         id: userId,
       },
-      select: {
-        email: true,
-        systemCustomizations: true,
+      include: {
+        activeProfile: {
+          include: {
+            systemCustomization: true,
+          },
+        },
+        profiles: true,
       },
     });
 
@@ -443,8 +447,14 @@ export const getCustomization = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
+    }
+
+    let profileToReturn = user.activeProfile as any;
+
+    if (!profileToReturn) {
+      profileToReturn = user.profiles.find((p) => p.isDefault) || null;
     }
 
     logger.info(
@@ -454,16 +464,16 @@ export const getCustomization = async (c: Context) => {
         userId: userId,
         userEmail: user.email,
       },
-      "System customizations fetched successfully"
+      "System customizations fetched successfully",
     );
 
     return c.json(
       {
         success: true,
         message: "System customizations fetched successfully",
-        data: user,
+        data: profileToReturn,
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in getCustomization controller");
@@ -473,7 +483,7 @@ export const getCustomization = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV == "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -493,18 +503,23 @@ export const updateCustomization = async (c: Context) => {
     const userId = c.get("user").id;
 
     const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
+      where: { id: userId },
+      include: {
+        activeProfile: { include: { systemCustomization: true } },
+        profiles: true,
       },
     });
 
     if (!user) {
+      return c.json({ success: false, message: "User not found" }, 404);
+    }
+
+    const profileToUpdate =
+      user.activeProfile || user.profiles.find((p) => p.isDefault);
+    if (!profileToUpdate) {
       return c.json(
-        {
-          success: false,
-          message: "User not found",
-        },
-        404
+        { success: false, message: "No profile found for user" },
+        404,
       );
     }
 
@@ -516,7 +531,6 @@ export const updateCustomization = async (c: Context) => {
     }>();
 
     const data: any = {};
-
     if (body.systemBio !== undefined) data.systemBio = body.systemBio;
     if (body.systemName !== undefined) data.systemName = body.systemName;
     if (body.systemTrait !== undefined) data.systemTrait = body.systemTrait;
@@ -524,34 +538,28 @@ export const updateCustomization = async (c: Context) => {
 
     if (Object.keys(data).length === 0) {
       return c.json(
-        {
-          success: false,
-          message: "No valid customization fields provided",
-        },
-        400
+        { success: false, message: "No valid customization fields provided" },
+        400,
       );
     }
 
     const updated = await prisma.systemCustomization.upsert({
-      where: { userId },
+      where: { profileId: profileToUpdate.id },
       create: {
-        userId,
+        profileId: profileToUpdate.id,
         systemTrait: data.systemTrait ?? [],
         systemBio: data.systemBio ?? null,
         systemName: data.systemName ?? null,
         systemPrompt: data.systemPrompt ?? "",
       },
-      update: {
-        ...data,
-        updatedAt: new Date(),
-      },
+      update: { ...data, updatedAt: new Date() },
     });
 
     await redisClient.set(
-      `user:customization:${userId}`,
+      `profile:customization:${profileToUpdate.id}`,
       JSON.stringify(updated),
       "EX",
-      24 * 3600
+      24 * 3600,
     );
 
     logger.info(
@@ -559,18 +567,18 @@ export const updateCustomization = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
+        profileId: profileToUpdate.id,
       },
-      "Customization saved successfully"
+      "Customization saved successfully",
     );
 
     return c.json(
       {
         success: true,
         message: "Customization saved successfully",
-        data: updated,
+        data: { profile: profileToUpdate, systemCustomization: updated },
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in updateCustomization controller");
@@ -580,7 +588,7 @@ export const updateCustomization = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -601,7 +609,7 @@ export const getApiKey = async (c: Context) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        byokEnable: true,
+        isByokEnabled: true,
         email: true,
         openRouterApiKey: {
           select: {
@@ -619,7 +627,7 @@ export const getApiKey = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -638,14 +646,14 @@ export const getApiKey = async (c: Context) => {
         userId: userId,
         userEmail: user.email,
       },
-      "API key fetched successfully"
+      "API key fetched successfully",
     );
 
     return c.json({
       success: true,
       message: "API key fetched successfully",
       data: {
-        byokEnable: user.byokEnable,
+        byokEnable: user.isByokEnabled,
         apiKey: user.openRouterApiKey
           ? {
               id: user.openRouterApiKey.id,
@@ -663,7 +671,7 @@ export const getApiKey = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -694,14 +702,14 @@ export const createApiKey = async (c: Context) => {
           ip,
           requestId,
         },
-        "Invalid format for openrouter api key"
+        "Invalid format for openrouter api key",
       );
       return c.json(
         {
           success: false,
           message: "Invalid format for openrouter api key",
         },
-        400
+        400,
       );
     }
 
@@ -715,7 +723,7 @@ export const createApiKey = async (c: Context) => {
           success: false,
           message: "API key already exists",
         },
-        400
+        400,
       );
     }
 
@@ -739,7 +747,7 @@ export const createApiKey = async (c: Context) => {
 
         await prisma.user.update({
           where: { id: userId },
-          data: { byokEnable: true },
+          data: { isByokEnabled: true },
         });
 
         logger.info(
@@ -748,7 +756,7 @@ export const createApiKey = async (c: Context) => {
             requestId,
             userId: userId,
           },
-          "API key created successfully"
+          "API key created successfully",
         );
 
         return c.json(
@@ -756,7 +764,7 @@ export const createApiKey = async (c: Context) => {
             success: true,
             message: "API key created successfully",
           },
-          201
+          201,
         );
       } else if (response.status === 401) {
         return c.json(
@@ -764,7 +772,7 @@ export const createApiKey = async (c: Context) => {
             success: false,
             message: "[UNAUTHORIZED] api key is unauthorized",
           },
-          401
+          401,
         );
       } else if (response.status === 403) {
         return c.json(
@@ -772,7 +780,7 @@ export const createApiKey = async (c: Context) => {
             success: false,
             message: "[FORBIDDEN] request forbidden from openrouter",
           },
-          403
+          403,
         );
       } else {
         return c.json(
@@ -780,7 +788,7 @@ export const createApiKey = async (c: Context) => {
             success: false,
             message: "[INTERNAL] Internal server error",
           },
-          500
+          500,
         );
       }
     } catch (error) {
@@ -791,14 +799,14 @@ export const createApiKey = async (c: Context) => {
           userId: userId,
           error,
         },
-        "Error from openrouter on api key checking"
+        "Error from openrouter on api key checking",
       );
       return c.json(
         {
           success: false,
           message: "Error while verifing openrouter API key",
         },
-        500
+        500,
       );
     }
   } catch (error) {
@@ -809,7 +817,7 @@ export const createApiKey = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -837,7 +845,7 @@ export const deleteApiKey = async (c: Context) => {
           success: false,
           message: "No API key found",
         },
-        404
+        404,
       );
     }
 
@@ -847,7 +855,7 @@ export const deleteApiKey = async (c: Context) => {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { byokEnable: false },
+      data: { isByokEnabled: false },
     });
 
     logger.info(
@@ -856,7 +864,7 @@ export const deleteApiKey = async (c: Context) => {
         requestId,
         userId: userId,
       },
-      "API key deleted successfully, and byokEnable is disabled"
+      "API key deleted successfully, and byokEnable is disabled",
     );
 
     return c.json(
@@ -864,7 +872,7 @@ export const deleteApiKey = async (c: Context) => {
         success: true,
         message: "API key deleted successfully",
       },
-      200
+      200,
     );
   } catch (error) {
     logger.error({ error }, "Error in deleteApiKey controller");
@@ -874,7 +882,7 @@ export const deleteApiKey = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -893,7 +901,11 @@ export const getChatHistory = async (c: Context) => {
     const userId = c.get("user").id;
 
     const conversations = await prisma.conversation.findMany({
-      where: { userId },
+      where: {
+        profile: {
+          userId,
+        },
+      },
       select: {
         id: true,
         title: true,
@@ -909,7 +921,7 @@ export const getChatHistory = async (c: Context) => {
         requestId,
         userId: userId,
       },
-      "Chat history fetched successfully"
+      "Chat history fetched successfully",
     );
 
     return c.json({
@@ -925,7 +937,7 @@ export const getChatHistory = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
@@ -957,7 +969,7 @@ export const deleteChatHistory = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -968,7 +980,11 @@ export const deleteChatHistory = async (c: Context) => {
 
     if (body.deleteAll) {
       await prisma.conversation.deleteMany({
-        where: { userId },
+        where: {
+          profile: {
+            userId,
+          },
+        },
       });
 
       logger.info(
@@ -977,7 +993,7 @@ export const deleteChatHistory = async (c: Context) => {
           requestId,
           userId: userId,
         },
-        "All conversations deleted successfully"
+        "All conversations deleted successfully",
       );
 
       return c.json({
@@ -990,7 +1006,9 @@ export const deleteChatHistory = async (c: Context) => {
       await prisma.conversation.deleteMany({
         where: {
           id: { in: body.ids },
-          userId,
+          profile: {
+            userId,
+          },
         },
       });
 
@@ -1000,7 +1018,7 @@ export const deleteChatHistory = async (c: Context) => {
           requestId,
           userId: userId,
         },
-        "Selected conversations deleted successfully"
+        "Selected conversations deleted successfully",
       );
 
       return c.json({
@@ -1014,7 +1032,7 @@ export const deleteChatHistory = async (c: Context) => {
         success: false,
         message: "No IDs or deleteAll flag provided",
       },
-      400
+      400,
     );
   } catch (error) {
     logger.error({ error }, "Error in deleteChatHistory controller");
@@ -1024,7 +1042,7 @@ export const deleteChatHistory = async (c: Context) => {
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };

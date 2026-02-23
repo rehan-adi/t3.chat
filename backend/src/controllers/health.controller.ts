@@ -16,7 +16,7 @@ export const healthCheck = (c: Context) => {
       message: "Server is up and running",
       uptime: process.uptime(),
     },
-    200
+    200,
   );
 };
 
@@ -52,17 +52,23 @@ export const readinessCheck = async (c: Context) => {
         success: isReady,
         status,
       },
-      isReady ? 200 : 503
+      isReady ? 200 : 503,
     );
   } catch (error) {
-    logger.error({ error }, "Error in readinessCheck controller");
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "readinessCheck controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };

@@ -5,11 +5,13 @@ import { config } from "@/config/config";
 import { isSameDayUTC, isSameMonthUTC } from "@/utils/dateChecker";
 
 /**
- * @desc checkCredits is for reset daily and monthly credits for premium and free users.
- * On home page frontend will call /check-credits api which will do the job of reseting credits.
- * No cron job or over-engineering, just a simple solution (for now).
- * @param c Hono Context
- * @returns Json Response with data
+ * @desc Lazily resets user credits based on plan type.
+ * Free users: daily reset.
+ * Premium users: monthly reset.
+ *
+ * Instead of using a cron job, reset logic is triggered
+ * when the client calls this endpoint. This avoids background
+ * workers and keeps the system simple.
  */
 
 type updatedDataType = {
@@ -35,7 +37,7 @@ export const checkCredits = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -53,7 +55,10 @@ export const checkCredits = async (c: Context) => {
     }
 
     if (user.isPremium) {
-      if (!user.lastResetMonth || !isSameMonthUTC(user.lastResetMonth, today)) {
+      if (
+        !user.lastMonthlyReset ||
+        !isSameMonthUTC(user.lastMonthlyReset, today)
+      ) {
         updatedData.lastMonthlyReset = today;
         updatedData.credits = 250;
         updateNeeded = true;
@@ -74,7 +79,7 @@ export const checkCredits = async (c: Context) => {
           userId: userId,
           data: updatedData,
         },
-        "Credits update"
+        "Credits update",
       );
     }
 
@@ -84,14 +89,22 @@ export const checkCredits = async (c: Context) => {
       resetApplied: updateNeeded,
     });
   } catch (error) {
-    logger.error({ error }, "Error in checkCredits controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "checkCredits controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };

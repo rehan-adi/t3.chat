@@ -7,11 +7,14 @@ import { generateOrderId } from "@/utils/generateRandomId";
 import { sendSubscriptionSuccessEmail } from "@/utils/sendEmail";
 
 /**
- * @desc initiateSubscription initiate a order in cashfree and return a payment_session_id.
- * We update our db with status PENDING and add few data
- * (amount, currency, orderId, paymentSessionId etc).
- * @param c Hono Context
- * @returns Json response with data
+ * @desc Initiates a subscription order using Cashfree payment gateway.
+ * Validates the selected plan, checks for any existing pending payments,
+ * creates a new payment record with status "PENDING", and generates a unique order ID.
+ * Calls Cashfree to create an order and retrieves a payment session ID.
+ * Updates the payment record with the session ID and returns all relevant order details
+ * for client-side processing.
+ *
+ * Handles errors by updating the payment status to "INIT_ORDER_FAILED" if Cashfree order creation fails.
  */
 
 const subscriptionPlan = {
@@ -35,7 +38,7 @@ export const initiateSubscription = async (c: Context) => {
           success: false,
           message: "Invalid subscription plan",
         },
-        400
+        400,
       );
     }
 
@@ -55,7 +58,7 @@ export const initiateSubscription = async (c: Context) => {
           success: false,
           message: "User not found",
         },
-        404
+        404,
       );
     }
 
@@ -76,7 +79,7 @@ export const initiateSubscription = async (c: Context) => {
             payment_session_id: existingPending.paymentSessionId,
           },
         },
-        200
+        200,
       );
     }
 
@@ -125,7 +128,7 @@ export const initiateSubscription = async (c: Context) => {
           orderId: orderId,
           error: error?.response?.data,
         },
-        "Cashfree order creation failed"
+        "Cashfree order creation failed",
       );
 
       await prisma.payment.update({
@@ -142,7 +145,7 @@ export const initiateSubscription = async (c: Context) => {
           success: false,
           message: "Failed to create subscription order",
         },
-        502
+        502,
       );
     }
 
@@ -154,7 +157,7 @@ export const initiateSubscription = async (c: Context) => {
         orderId: orderId,
         payment_session_id: response.data.payment_session_id,
       },
-      "Subscription order created successfully"
+      "Subscription order created successfully",
     );
 
     return c.json(
@@ -171,27 +174,38 @@ export const initiateSubscription = async (c: Context) => {
           payment_session_id: response.data.payment_session_id,
         },
       },
-      201
+      201,
     );
   } catch (error) {
-    logger.error({ error }, "Error in initiateSubscription controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "initiateSubscription controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
 
 /**
- * @desc verifySubscriptionStatus verifies subscription status from db.
- * If payment is SUCCESS or FAILED we return response.
- * If status is still pending we check cashfree and update db if status is PAID
- * @param c Hono Context
- * @returns Json Response
+ * @desc Verifies the subscription payment status for a given order.
+ * Checks the database for the current status:
+ *   - If status is "SUCCESS" or "FAILED", returns it immediately.
+ *   - If status is "PENDING", queries Cashfree to fetch the latest status.
+ *     - Updates the database to "SUCCESS" if payment is confirmed.
+ * Returns the current status and a relevant message.
+ *
+ * Handles errors gracefully and logs any failures in fetching the status from Cashfree.
  */
 
 export const verifySubscriptionStatus = async (c: Context) => {
@@ -207,7 +221,7 @@ export const verifySubscriptionStatus = async (c: Context) => {
           success: false,
           message: "OrderId not provided",
         },
-        400
+        400,
       );
     }
 
@@ -223,7 +237,7 @@ export const verifySubscriptionStatus = async (c: Context) => {
           success: false,
           message: `Order not found for orderId ${orderId}`,
         },
-        404
+        404,
       );
     }
 
@@ -233,7 +247,7 @@ export const verifySubscriptionStatus = async (c: Context) => {
           success: true,
           message: "Subscription success",
         },
-        200
+        200,
       );
     }
 
@@ -243,7 +257,7 @@ export const verifySubscriptionStatus = async (c: Context) => {
           success: true,
           message: "Subscription failed",
         },
-        200
+        200,
       );
     }
 
@@ -265,7 +279,7 @@ export const verifySubscriptionStatus = async (c: Context) => {
             success: true,
             status: order.status,
           },
-          200
+          200,
         );
       }
     } catch (error: any) {
@@ -275,7 +289,7 @@ export const verifySubscriptionStatus = async (c: Context) => {
           requestId,
           error: error.response.data.message,
         },
-        "Failed to check order status in cashfree"
+        "Failed to check order status in cashfree",
       );
     }
 
@@ -284,26 +298,41 @@ export const verifySubscriptionStatus = async (c: Context) => {
         success: true,
         status: order.status,
       },
-      200
+      200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in verifySubscriptionStatus controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "verifySubscriptionStatus controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
         error: config.NODE_ENV === "development" ? error : undefined,
       },
-      500
+      500,
     );
   }
 };
 
 /**
- * @desc cashfreeWebHook is update db status based on the payment status in cashfree.
- * Cashfree hits our API when subscription payment succeeds or fails.
- * @param c Hono Context
- * @returns Json Response
+ * @desc Handles Cashfree subscription payment webhooks and updates database accordingly.
+ *
+ * This endpoint is called by Cashfree when a subscription payment succeeds, fails, or is dropped by the user.
+ * Steps performed:
+ *   - Verifies webhook signature to ensure authenticity.
+ *   - Finds the payment in the database using orderId.
+ *   - If the payment is already SUCCESS, logs and returns immediately.
+ *   - Updates payment status to SUCCESS if payment succeeded, and marks the user as premium.
+ *   - Sends subscription success email after successful payment.
+ *   - Updates payment status to FAILED if payment failed or user dropped.
+ *   - Stores the raw webhook payload for reference.
  */
 
 export const cashfreeWebHook = async (c: Context) => {
@@ -320,13 +349,13 @@ export const cashfreeWebHook = async (c: Context) => {
           ip,
           requestId,
         },
-        "Missing webhook headers"
+        "Missing webhook headers",
       );
       return c.json(
         {
           success: true,
         },
-        200
+        200,
       );
     }
 
@@ -339,13 +368,13 @@ export const cashfreeWebHook = async (c: Context) => {
         {
           error: err.message,
         },
-        "Invalid Cashfree webhook signature"
+        "Invalid Cashfree webhook signature",
       );
       return c.json(
         {
           success: true,
         },
-        200
+        200,
       );
     }
 
@@ -361,7 +390,7 @@ export const cashfreeWebHook = async (c: Context) => {
     if (!order) {
       logger.warn(
         { ip, requestId, orderId: payload.data.order.order_id },
-        "Payment not found for webhook"
+        "Payment not found for webhook",
       );
 
       return c.json({ success: true }, 200);
@@ -374,13 +403,13 @@ export const cashfreeWebHook = async (c: Context) => {
           requestId,
           orderId: payload.data.order.order_id,
         },
-        `Payment already SUCCESS for this orderId ${order.id}`
+        `Payment already SUCCESS for this orderId ${order.id}`,
       );
       return c.json(
         {
           success: true,
         },
-        200
+        200,
       );
     }
 
@@ -421,7 +450,7 @@ export const cashfreeWebHook = async (c: Context) => {
         } catch (err) {
           logger.error(
             { err, orderId: order.id },
-            "Failed to send Email after payment success"
+            "Failed to send Email after payment success",
           );
         }
       }
@@ -457,16 +486,24 @@ export const cashfreeWebHook = async (c: Context) => {
       {
         success: true,
       },
-      200
+      200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in cashfreeWebHook controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "cashfreeWebHook controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
       },
-      500
+      500,
     );
   }
 };
