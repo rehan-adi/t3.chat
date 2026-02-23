@@ -15,6 +15,8 @@ interface CONFIG {
 
   FRONTEND_ORIGIN: string;
   BACKEND_ORIGIN: string;
+
+  CONVERSATION_SUMMARY_MODEL: string;
 }
 
 export const config: CONFIG = {
@@ -34,4 +36,6 @@ export const config: CONFIG = {
 
   FRONTEND_ORIGIN: Bun.env.FRONTEND_ORIGIN!,
   BACKEND_ORIGIN: Bun.env.BACKEND_ORIGIN!,
+
+  CONVERSATION_SUMMARY_MODEL: Bun.env.CONVERSATION_SUMMARY_MODEL!,
 };
