@@ -589,7 +589,7 @@ export const conversationChatController = async (c: Context) => {
 
       if (isTemporaryChatEnabled) {
         const now = new Date();
-        expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+        expiresAt = new Date(now.getTime() + 30 * 60 * 1000);
       }
 
       const newConv = await prisma.conversation.create({
