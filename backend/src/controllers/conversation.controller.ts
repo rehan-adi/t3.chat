@@ -313,12 +313,12 @@ export const updateConversationPin = async (c: Context) => {
 };
 
 /**
- * @desc Update the title of a conversation.
+ * @desc Rename the title of a conversation.
  * Validates input and ensures the conversation belongs
  * to the authenticated user's profile before updating.
  */
 
-export const updateConversation = async (c: Context) => {
+export const renameConversationTitle = async (c: Context) => {
   const ip = c.get("ip");
   const requestId = c.get("requestId");
 
@@ -1209,6 +1209,108 @@ export const deleteAllArchivedConversations = async (c: Context) => {
         stack: error instanceof Error ? error.stack : undefined,
       },
       "deleteAllArchiveConversation controller failed",
+    );
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500,
+    );
+  }
+};
+
+/**
+ * @desc Move a conversation from one profile to another for the authenticated user.
+ * Validates that both the conversation and the target profile belong to the user.
+ * Updates the `profileId` of the conversation to the new profile.
+ */
+
+export const moveConversation = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    const { profileId, conversationId } = await c.req.json<{
+      profileId: string;
+      conversationId: string;
+    }>();
+
+    const targetProfile = await prisma.profile.findUnique({
+      where: {
+        id: profileId,
+        userId: userId,
+      },
+    });
+
+    if (!targetProfile) {
+      return c.json(
+        {
+          success: false,
+          message: "Target profile not found or does not belong to user",
+        },
+        404,
+      );
+    }
+
+    const conversation = await prisma.conversation.findUnique({
+      where: {
+        id: conversationId,
+      },
+      include: {
+        profile: true,
+      },
+    });
+
+    if (!conversation || conversation.profile.userId !== userId) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found or does not belong to user",
+        },
+        404,
+      );
+    }
+
+    const updatedConversation = await prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+      data: { profileId: profileId },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+        conversationId: conversationId,
+        fromProfileId: conversation.profileId,
+        toProfileId: profileId,
+      },
+      "Conversation moved successfully",
+    );
+
+    return c.json(
+      {
+        success: true,
+        message: "Conversation moved successfully",
+        conversation: updatedConversation,
+      },
+      200,
+    );
+  } catch (error) {
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "moveConversation controller failed",
     );
     return c.json(
       {

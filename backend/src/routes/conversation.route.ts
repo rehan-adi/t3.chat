@@ -2,13 +2,14 @@ import { Hono } from "hono";
 import { rateLimiter } from "@/middlewares/limiter";
 import { authorization } from "@/middlewares/authorization";
 import {
+  moveConversation,
   getAllConversation,
   getConversationById,
-  updateConversation,
   deleteConversation,
   archiveConversation,
   unarchiveConversation,
   updateConversationPin,
+  renameConversationTitle,
   getArchivedConversations,
   conversationChatController,
   deleteArchivedConversation,
@@ -16,6 +17,13 @@ import {
 } from "@/controllers/conversation.controller";
 
 export const conversationRoute = new Hono();
+
+conversationRoute.patch(
+  "/move",
+  authorization,
+  rateLimiter({ points: 20, duration: 300 }),
+  moveConversation,
+);
 
 conversationRoute.get(
   "/",
@@ -36,10 +44,10 @@ conversationRoute.post(
   conversationChatController,
 ); // need to work here mainly
 conversationRoute.patch(
-  "/:conversationId",
+  "/:conversationId/rename",
   authorization,
   rateLimiter({ points: 20, duration: 300 }),
-  updateConversation,
+  renameConversationTitle,
 );
 conversationRoute.delete(
   "/:conversationId",
@@ -53,8 +61,6 @@ conversationRoute.patch(
   rateLimiter({ points: 20, duration: 300 }),
   updateConversationPin,
 );
-
-// archived routes
 conversationRoute.patch(
   "/:conversationId/archive",
   authorization,
