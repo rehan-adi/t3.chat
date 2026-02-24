@@ -1,6 +1,7 @@
 import { cors } from "hono/cors";
 import { config } from "@/config/config";
 import { register } from "@/lib/metrics";
+import { job } from "@/cron/cleanup.cron";
 import { Hono, type Context } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { requestLogger } from "@/middlewares/logger";
@@ -17,6 +18,8 @@ import { subscriptionRoute } from "@/routes/subscription.route";
 import { conversationRoute } from "@/routes/conversation.route";
 
 export const app = new Hono();
+
+job.start();
 
 app.use(secureHeaders());
 app.use(requestLogger);

@@ -6,7 +6,7 @@
   "type": "module",
   "module": "src/server.ts",
   "scripts": {
-    "start": "bun run src/server.ts", 
+    "start": "bun run src/server.ts",
     "dev": "bun run --hot src/server.ts"
   },
   "devDependencies": {
@@ -25,6 +25,7 @@
     "@prisma/adapter-pg": "^7.0.1",
     "@prisma/client": "^7.0.1",
     "cashfree-pg": "^5.1.0",
+    "cron": "^4.4.0",
     "dotenv": "^17.2.3",
     "hono": "^4.10.7",
     "ioredis": "^5.8.2",
