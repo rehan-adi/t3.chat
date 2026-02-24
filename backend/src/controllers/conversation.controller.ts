@@ -47,6 +47,7 @@ export const getAllConversation = async (c: Context) => {
             conversations: {
               where: {
                 isTemporaryChat: false,
+                isArchived: false,
               },
               select: {
                 id: true,
@@ -849,6 +850,365 @@ ${oldMessages.map((m) => `${m.role}: ${m.response}`).join("\n")}
         stack: error instanceof Error ? error.stack : undefined,
       },
       "conversationChatController controller failed",
+    );
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+        error: config.NODE_ENV === "development" ? error : undefined,
+      },
+      500,
+    );
+  }
+};
+
+/**
+ * @desc Archive a conversation for the authenticated user.
+ * Validates ownership of the conversation and marks it as archived.
+ * The conversation remains stored but is excluded from active conversation lists.
+ */
+
+export const archiveConversation = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+    const conversationId = c.req.param("conversationId");
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        profile: {
+          userId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found",
+        },
+        404,
+      );
+    }
+
+    await prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+      data: {
+        isArchived: true,
+        archivedAt: new Date(),
+      },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+      },
+      "Conversation archived successfully",
+    );
+    return c.json(
+      {
+        success: true,
+        message: "Conversation archived successfully",
+      },
+      200,
+    );
+  } catch (error) {
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "archiveConversation controller failed",
+    );
+
+    return c.json({ success: false, message: "Internal server error" }, 500);
+  }
+};
+
+/**
+ * @desc Restore an archived conversation for the authenticated user.
+ * Validates ownership and marks the conversation as active
+ * so it appears again in regular conversation lists.
+ */
+
+export const unarchiveConversation = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+    const conversationId = c.req.param("conversationId");
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        isArchived: true,
+        profile: {
+          userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Conversation not found",
+        },
+        404,
+      );
+    }
+
+    await prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+      data: {
+        isArchived: false,
+        archivedAt: null,
+      },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+      },
+      "Conversation unarchived successfully",
+    );
+    return c.json(
+      {
+        success: true,
+        message: "Conversation unarchived successfully",
+      },
+      200,
+    );
+  } catch (error) {
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "unarchiveConversation controller failed",
+    );
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+      },
+      500,
+    );
+  }
+};
+
+/**
+ * @desc Retrieve all archived conversations for the authenticated user.
+ * Fetches archived, non-temporary conversations across all user profiles,
+ * ordered by most recently updated.
+ */
+
+export const getArchivedConversations = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    const archivedConversations = await prisma.conversation.findMany({
+      where: {
+        isArchived: true,
+        isTemporaryChat: false,
+        archivedAt: { not: null },
+        profile: {
+          userId,
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        archivedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+      },
+      "Archived conversations fetched successfully",
+    );
+    return c.json(
+      {
+        success: true,
+        message: "Archived conversations fetched successfully",
+        data: archivedConversations,
+      },
+      200,
+    );
+  } catch (error) {
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getAllArchiveConversations controller failed",
+    );
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+      },
+      500,
+    );
+  }
+};
+
+/**
+ * @desc Permanently delete a single archived conversation
+ * for the authenticated user.
+ * Ensures the conversation belongs to the user and is archived
+ * before removing it from the database.
+ */
+
+export const deleteArchivedConversation = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+    const conversationId = c.req.param("conversationId");
+
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        isArchived: true,
+        profile: {
+          userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!conversation) {
+      return c.json(
+        {
+          success: false,
+          message: "Archived conversation not found",
+        },
+        404,
+      );
+    }
+
+    await prisma.conversation.delete({
+      where: {
+        id: conversationId,
+      },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+      },
+      "Archived conversation deleted successfully",
+    );
+    return c.json(
+      {
+        success: true,
+        message: "Archived conversation deleted successfully",
+      },
+      200,
+    );
+  } catch (error) {
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "deleteArchiveConversation controller failed",
+    );
+    return c.json(
+      {
+        success: false,
+        message: "Internal server error",
+      },
+      500,
+    );
+  }
+};
+
+/**
+ * @desc Permanently delete all archived conversations
+ * across all profiles for the authenticated user.
+ * Only archived conversations owned by the user are removed.
+ */
+
+export const deleteAllArchivedConversations = async (c: Context) => {
+  const ip = c.get("ip");
+  const requestId = c.get("requestId");
+
+  try {
+    const userId = c.get("user").id;
+
+    await prisma.conversation.deleteMany({
+      where: {
+        isArchived: true,
+        archivedAt: { not: null },
+        profile: {
+          userId: userId,
+        },
+      },
+    });
+
+    logger.info(
+      {
+        ip,
+        requestId,
+        userId: userId,
+      },
+      "All archived conversations deleted",
+    );
+
+    return c.json(
+      {
+        success: true,
+        message: "All Archive Conversations deleted",
+      },
+      200,
+    );
+  } catch (error) {
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "deleteAllArchiveConversation controller failed",
     );
     return c.json(
       {

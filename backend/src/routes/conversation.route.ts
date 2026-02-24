@@ -6,8 +6,13 @@ import {
   getConversationById,
   updateConversation,
   deleteConversation,
+  archiveConversation,
+  unarchiveConversation,
   updateConversationPin,
+  getArchivedConversations,
   conversationChatController,
+  deleteArchivedConversation,
+  deleteAllArchivedConversations,
 } from "@/controllers/conversation.controller";
 
 export const conversationRoute = new Hono();
@@ -16,35 +21,67 @@ conversationRoute.get(
   "/",
   authorization,
   rateLimiter({ points: 100, duration: 300 }),
-  getAllConversation
+  getAllConversation,
 );
 conversationRoute.get(
   "/:conversationId",
   authorization,
   rateLimiter({ points: 35, duration: 300 }),
-  getConversationById
+  getConversationById,
 );
 conversationRoute.post(
   "/",
   authorization,
   rateLimiter({ points: 25, duration: 300 }),
-  conversationChatController
+  conversationChatController,
 ); // need to work here mainly
 conversationRoute.patch(
   "/:conversationId",
   authorization,
   rateLimiter({ points: 20, duration: 300 }),
-  updateConversation
+  updateConversation,
 );
 conversationRoute.delete(
   "/:conversationId",
   authorization,
   rateLimiter({ points: 20, duration: 300 }),
-  deleteConversation
+  deleteConversation,
 );
 conversationRoute.patch(
   "/:conversationId/pin",
   authorization,
   rateLimiter({ points: 20, duration: 300 }),
-  updateConversationPin
+  updateConversationPin,
+);
+
+// archived routes
+conversationRoute.patch(
+  "/:conversationId/archive",
+  authorization,
+  rateLimiter({ points: 30, duration: 300 }),
+  archiveConversation,
+);
+conversationRoute.patch(
+  "/:conversationId/unarchive",
+  authorization,
+  rateLimiter({ points: 30, duration: 300 }),
+  unarchiveConversation,
+);
+conversationRoute.get(
+  "/archived",
+  authorization,
+  rateLimiter({ points: 100, duration: 300 }),
+  getArchivedConversations,
+);
+conversationRoute.delete(
+  "/:conversationId/archive",
+  authorization,
+  rateLimiter({ points: 10, duration: 300 }),
+  deleteArchivedConversation,
+);
+conversationRoute.delete(
+  "/archived",
+  authorization,
+  rateLimiter({ points: 5, duration: 300 }),
+  deleteAllArchivedConversations,
 );
