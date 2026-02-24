@@ -52,15 +52,17 @@ model Conversation {
   title           String?
   summary         String?
   isPinned        Boolean   @default(false) @map("is_pinned")
+  isArchived      Boolean   @default(false) @map("is_archived")
   profileId       String    @map("profile_id")
   profile         Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   messages        Message[]
   expiresAt       DateTime? @map("expires_at")
+  archivedAt      DateTime? @map("archived_at")
   isTemporaryChat Boolean   @default(false) @map("is_temporary_chat")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  @@index([expiresAt])
+  @@index([expiresAt, isArchived])
   @@map("conversations")
 }
 
