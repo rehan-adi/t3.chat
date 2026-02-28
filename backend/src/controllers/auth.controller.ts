@@ -56,7 +56,7 @@ export const requestOtp = async (c: Context) => {
         const createdUser = await tx.user.create({
           data: {
             email: data.email,
-            name: `User-${randomId}`,
+            name: `user-${randomId}`.toLowerCase(),
           },
         });
 
