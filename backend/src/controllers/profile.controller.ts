@@ -2,11 +2,12 @@ import type { Context } from "hono";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/utils/logger";
 import { config } from "@/config/config";
+import { Prisma } from "@/generated/prisma/client";
 
 /**
  * @desc Create a new profile for the authenticated user.
  * Enforces profile creation limits based on subscription tier
- * and validates that the profile name is provided.
+ * and validates that the profile name is provided along with duplicate profile name check.
  */
 
 export const createProfile = async (c: Context) => {
@@ -50,7 +51,9 @@ export const createProfile = async (c: Context) => {
 
     const body = await c.req.json<{ profileName: string }>();
 
-    if (!body.profileName || body.profileName.trim() === "") {
+    const profileName = body.profileName?.trim().toLowerCase();
+
+    if (!profileName) {
       return c.json(
         {
           success: false,
@@ -60,11 +63,21 @@ export const createProfile = async (c: Context) => {
       );
     }
 
+    if (profileName.length > 19) {
+      return c.json(
+        {
+          success: false,
+          message: "Profile name is too long, it should be under 19",
+        },
+        400,
+      );
+    }
+
     const newProfile = await prisma.profile.create({
       data: {
         userId,
-        profileName: body.profileName.trim(),
         isDefault: false,
+        profileName: profileName,
       },
     });
 
@@ -87,6 +100,18 @@ export const createProfile = async (c: Context) => {
       201,
     );
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return c.json(
+        {
+          success: false,
+          message: "Profile already exists with this name",
+        },
+        409,
+      );
+    }
     logger.error(
       {
         ip,
@@ -123,11 +148,23 @@ export const updateProfileName = async (c: Context) => {
 
     const body = await c.req.json<{ profileName: string }>();
 
-    if (!body.profileName || body.profileName.trim() === "") {
+    const profileName = body.profileName?.trim().toLowerCase();
+
+    if (!profileName) {
       return c.json(
         {
           success: false,
           message: "Profile name is required",
+        },
+        400,
+      );
+    }
+
+    if (profileName.length > 19) {
+      return c.json(
+        {
+          success: false,
+          message: "Profile name is too long, it should be under 19",
         },
         400,
       );
@@ -155,7 +192,7 @@ export const updateProfileName = async (c: Context) => {
         id: profileId,
       },
       data: {
-        profileName: body.profileName.trim(),
+        profileName: profileName,
       },
     });
 
@@ -178,6 +215,18 @@ export const updateProfileName = async (c: Context) => {
       200,
     );
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return c.json(
+        {
+          success: false,
+          message: "Profile already exists with this name",
+        },
+        409,
+      );
+    }
     logger.error(
       {
         ip,
