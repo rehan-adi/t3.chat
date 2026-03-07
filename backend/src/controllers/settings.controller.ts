@@ -13,9 +13,10 @@ import {
 } from "@/validations/settings.validations";
 
 /**
- * @desc getAccount fetch user's account and return needed data.
- * @param c Hono Context
- * @returns Json response with data
+ * @desc Retrieve account details for the authenticated user.
+ * Returns the user's basic information such as id, name, email,
+ * credits, subscription status, profile picture, and account settings
+ * like email verification and billing preferences.
  */
 
 export const getAccount = async (c: Context) => {
@@ -70,7 +71,15 @@ export const getAccount = async (c: Context) => {
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in getAccount controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getAccount controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -83,9 +92,11 @@ export const getAccount = async (c: Context) => {
 };
 
 /**
- * @desc deleteAccount permanently delete users account and all associated data.
- * @param c Hono Context
- * @returns Json response
+ * @desc Permanently delete the authenticated user's account.
+ * Removes the user and all associated data such as profiles,
+ * conversations, messages, and related records through
+ * database cascade deletion. Also clears cached data and
+ * removes the authentication cookie.
  */
 
 export const deleteAccount = async (c: Context) => {
@@ -95,29 +106,37 @@ export const deleteAccount = async (c: Context) => {
   try {
     const userId = c.get("user").id;
 
-    const user = await prisma.user.findUnique({
+    const profiles = await prisma.profile.findMany({
       where: {
-        id: userId,
+        userId: userId,
+      },
+      select: {
+        id: true,
       },
     });
 
-    if (!user) {
-      return c.json(
-        {
-          success: false,
-          message: "User not found",
-        },
-        404,
-      );
-    }
+    const profileIds = profiles.map((p) => p.id);
 
     await prisma.user.delete({
-      where: {
-        id: userId,
-      },
+      where: { id: userId },
     });
 
-    await redisClient.del(`user:customization:${userId}`);
+    try {
+      if (profileIds.length > 0) {
+        const keys = profileIds.map((id) => `profile:customization:${id}`);
+        await redisClient.del(...keys);
+      }
+    } catch (cacheError) {
+      logger.warn(
+        {
+          ip,
+          requestId,
+          userId: userId,
+          error: cacheError,
+        },
+        "Failed to clear profile customization cache",
+      );
+    }
 
     deleteCookie(c, "token");
 
@@ -125,7 +144,7 @@ export const deleteAccount = async (c: Context) => {
       {
         ip,
         requestId,
-        userId: user.id,
+        userId: userId,
       },
       "Account deleted successfully",
     );
@@ -137,13 +156,30 @@ export const deleteAccount = async (c: Context) => {
       },
       200,
     );
-  } catch (error) {
-    logger.error({ error }, "Error in deleteAccount controller");
+  } catch (error: any) {
+    if (error?.code === "P2025") {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404,
+      );
+    }
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "deleteAccount controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
-        error: config.NODE_ENV == "development" ? error : undefined,
+        error: config.NODE_ENV === "development" ? error : undefined,
       },
       500,
     );
@@ -151,9 +187,9 @@ export const deleteAccount = async (c: Context) => {
 };
 
 /**
- * @desc updateBillingPreference Update billing preference (enable/disable)
- * @param c Hono Context
- * @returns Json response
+ * @desc Update the authenticated user's billing preference.
+ * Enables or disables billing features such as payments
+ * and premium-related settings for the user's account.
  */
 
 export const updateBillingPreference = async (c: Context) => {
@@ -163,9 +199,9 @@ export const updateBillingPreference = async (c: Context) => {
   try {
     const userId = c.get("user").id;
 
-    const { isbillingPreferencesEnable } = await c.req.json();
+    const { isBillingPreferencesEnabled } = await c.req.json();
 
-    if (typeof isbillingPreferencesEnable !== "boolean") {
+    if (typeof isBillingPreferencesEnabled !== "boolean") {
       return c.json(
         {
           success: false,
@@ -177,7 +213,9 @@ export const updateBillingPreference = async (c: Context) => {
 
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { isBillingPreferencesEnabled: isbillingPreferencesEnable },
+      data: {
+        isBillingPreferencesEnabled: isBillingPreferencesEnabled,
+      },
       select: {
         id: true,
         email: true,
@@ -190,8 +228,7 @@ export const updateBillingPreference = async (c: Context) => {
         ip,
         requestId,
         userId: user.id,
-        userEmail: user.email,
-        isbillingPreferencesEnable,
+        isBillingPreferencesEnabled,
       },
       "Billing preference updated",
     );
@@ -221,9 +258,8 @@ export const updateBillingPreference = async (c: Context) => {
 };
 
 /**
- * @desc updateName update user's name.
- * @param c Hono Context
- * @returns Json response
+ * @desc Update the authenticated user's display name.
+ * Validates the provided name and updates it in the user's account.
  */
 
 export const updateName = async (c: Context) => {
@@ -232,19 +268,6 @@ export const updateName = async (c: Context) => {
 
   try {
     const userId = c.get("user").id;
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!user) {
-      return c.json({
-        success: false,
-        message: "User not found",
-      });
-    }
 
     const body = await c.req.json<{ name: string }>();
 
@@ -255,6 +278,7 @@ export const updateName = async (c: Context) => {
         {
           ip,
           requestId,
+          userId: userId,
         },
         "Name validation failed",
       );
@@ -268,12 +292,8 @@ export const updateName = async (c: Context) => {
     }
 
     await prisma.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        name: data.name,
-      },
+      where: { id: userId },
+      data: { name: data.name },
     });
 
     logger.info(
@@ -281,7 +301,6 @@ export const updateName = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
       },
       "Name updated successfully",
     );
@@ -293,13 +312,22 @@ export const updateName = async (c: Context) => {
       },
       200,
     );
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === "P2025") {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404,
+      );
+    }
     logger.error({ error }, "Error in updateName controller");
     return c.json(
       {
         success: false,
         message: "Internal server error",
-        error: config.NODE_ENV == "development" ? error : undefined,
+        error: config.NODE_ENV === "development" ? error : undefined,
       },
       500,
     );
@@ -307,10 +335,9 @@ export const updateName = async (c: Context) => {
 };
 
 /**
- * @desc updateProfilePicture update users's profile picture.
- * If user does have a old pfp, delete it from s3 and update db.
- * @param c Hono Context
- * @returns Json response
+ * @desc Update the authenticated user's profile picture.
+ * If the user already has a profile picture, the old object
+ * is removed from S3 before updating the database.
  */
 
 export const updateProfilePicture = async (c: Context) => {
@@ -332,10 +359,15 @@ export const updateProfilePicture = async (c: Context) => {
       );
     }
 
-    const url = `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    const baseUrl = `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`;
+    const url = `${baseUrl}${key}`;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      select: {
+        profilePicture: true,
+        email: true,
+      },
     });
 
     if (!user) {
@@ -348,11 +380,8 @@ export const updateProfilePicture = async (c: Context) => {
       );
     }
 
-    if (user?.profilePicture) {
-      const oldKey = user.profilePicture?.replace(
-        `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
-        "",
-      );
+    if (user.profilePicture) {
+      const oldKey = user.profilePicture.replace(baseUrl, "");
 
       const command = new DeleteObjectCommand({
         Bucket: config.AWS_S3_BUCKET,
@@ -367,7 +396,7 @@ export const updateProfilePicture = async (c: Context) => {
             requestId,
             userId: userId,
           },
-          "User's old profile picture deleted successfully from S3",
+          "Old profile picture deleted from S3",
         );
       } catch (error) {
         logger.error(
@@ -375,10 +404,9 @@ export const updateProfilePicture = async (c: Context) => {
             ip,
             requestId,
             userId: userId,
-            userEmail: user.email,
             error,
           },
-          "Error while deleting user's old pfp key from s3",
+          "Failed to delete old profile picture from S3",
         );
       }
     }
@@ -401,13 +429,29 @@ export const updateProfilePicture = async (c: Context) => {
       success: true,
       message: "Profile picture updated successfully",
     });
-  } catch (error) {
-    logger.error({ error }, "Error in updateProfilePicture controller");
+  } catch (error: any) {
+    if (error?.code === "P2025") {
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404,
+      );
+    }
+    logger.error(
+      {
+        ip,
+        requestId,
+        error,
+      },
+      "Error in updateProfilePicture controller",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
-        error: config.NODE_ENV == "development" ? error : undefined,
+        error: config.NODE_ENV === "development" ? error : undefined,
       },
       500,
     );
@@ -415,9 +459,10 @@ export const updateProfilePicture = async (c: Context) => {
 };
 
 /**
- * @desc getCustomization just fetch users customization data and return it
- * @param c Hono Context
- * @returns Json response with data
+ * @desc Fetch the system customization for the user's active profile.
+ * Customization is stored per profile. This endpoint reads directly from
+ * the database because the settings page is low-frequency traffic and
+ * requires resolving the user's active or default profile first.
  */
 
 export const getCustomization = async (c: Context) => {
@@ -431,13 +476,20 @@ export const getCustomization = async (c: Context) => {
       where: {
         id: userId,
       },
-      include: {
+      select: {
         activeProfile: {
-          include: {
+          select: {
+            id: true,
             systemCustomization: true,
           },
         },
-        profiles: true,
+        profiles: {
+          select: {
+            id: true,
+            isDefault: true,
+            systemCustomization: true,
+          },
+        },
       },
     });
 
@@ -451,10 +503,20 @@ export const getCustomization = async (c: Context) => {
       );
     }
 
-    let profileToReturn = user.activeProfile as any;
+    let profileToReturn = user.activeProfile;
 
     if (!profileToReturn) {
       profileToReturn = user.profiles.find((p) => p.isDefault) || null;
+    }
+
+    if (!profileToReturn) {
+      return c.json(
+        {
+          success: false,
+          message: "No profile found for user",
+        },
+        404,
+      );
     }
 
     logger.info(
@@ -462,26 +524,33 @@ export const getCustomization = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
       },
-      "System customizations fetched successfully",
+      "System customization fetched successfully",
     );
 
-    return c.json(
-      {
-        success: true,
-        message: "System customizations fetched successfully",
-        data: profileToReturn,
+    return c.json({
+      success: true,
+      message: "System customization fetched successfully",
+      data: {
+        profileId: profileToReturn.id,
+        systemCustomization: profileToReturn.systemCustomization || null,
       },
-      200,
-    );
+    });
   } catch (error) {
-    logger.error({ error }, "Error in getCustomization controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getCustomization controller failed",
+    );
     return c.json(
       {
         success: false,
         message: "Internal server error",
-        error: config.NODE_ENV == "development" ? error : undefined,
+        error: config.NODE_ENV === "development" ? error : undefined,
       },
       500,
     );
@@ -489,10 +558,9 @@ export const getCustomization = async (c: Context) => {
 };
 
 /**
- * @desc updateCustomization update or create users Customization data.
- * It set's the customization data into Redis cache for 1 day.
- * @param c Hono Context
- * @returns Json response
+ * @desc Create or update system customization for the user's active profile.
+ * Customization is stored per profile in the database and the latest version
+ * is written to Redis so other high-frequency services can access it quickly.
  */
 
 export const updateCustomization = async (c: Context) => {
@@ -511,14 +579,24 @@ export const updateCustomization = async (c: Context) => {
     });
 
     if (!user) {
-      return c.json({ success: false, message: "User not found" }, 404);
+      return c.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        404,
+      );
     }
 
     const profileToUpdate =
       user.activeProfile || user.profiles.find((p) => p.isDefault);
+
     if (!profileToUpdate) {
       return c.json(
-        { success: false, message: "No profile found for user" },
+        {
+          success: false,
+          message: "No profile found for user",
+        },
         404,
       );
     }
@@ -530,7 +608,13 @@ export const updateCustomization = async (c: Context) => {
       systemTrait?: Trait[];
     }>();
 
-    const data: any = {};
+    const data: Partial<{
+      systemName: string;
+      systemBio: string;
+      systemPrompt: string;
+      systemTrait: Trait[];
+    }> = {};
+
     if (body.systemBio !== undefined) data.systemBio = body.systemBio;
     if (body.systemName !== undefined) data.systemName = body.systemName;
     if (body.systemTrait !== undefined) data.systemTrait = body.systemTrait;
@@ -538,7 +622,10 @@ export const updateCustomization = async (c: Context) => {
 
     if (Object.keys(data).length === 0) {
       return c.json(
-        { success: false, message: "No valid customization fields provided" },
+        {
+          success: false,
+          message: "No valid customization fields provided",
+        },
         400,
       );
     }
@@ -567,21 +654,28 @@ export const updateCustomization = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        profileId: profileToUpdate.id,
       },
-      "Customization saved successfully",
+      "Customization updated successfully",
     );
 
-    return c.json(
-      {
-        success: true,
-        message: "Customization saved successfully",
-        data: { profile: profileToUpdate, systemCustomization: updated },
+    return c.json({
+      success: true,
+      message: "Customization saved successfully",
+      data: {
+        profileId: profileToUpdate.id,
+        systemCustomization: updated,
       },
-      200,
-    );
+    });
   } catch (error) {
-    logger.error({ error }, "Error in updateCustomization controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "updateCustomization controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -594,9 +688,8 @@ export const updateCustomization = async (c: Context) => {
 };
 
 /**
- * @desc getApiKey fetch users openouter api key and return it to user.
- * @param c Hono Context
- * @returns Json response with data
+ * @desc Fetch the user's OpenRouter API key status and return a masked version of the key.
+ * The actual key is never exposed to the client for security reasons.
  */
 
 export const getApiKey = async (c: Context) => {
@@ -609,8 +702,8 @@ export const getApiKey = async (c: Context) => {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        isByokEnabled: true,
         email: true,
+        isByokEnabled: true,
         openRouterApiKey: {
           select: {
             id: true,
@@ -644,7 +737,6 @@ export const getApiKey = async (c: Context) => {
         ip,
         requestId,
         userId: userId,
-        userEmail: user.email,
       },
       "API key fetched successfully",
     );
@@ -653,7 +745,7 @@ export const getApiKey = async (c: Context) => {
       success: true,
       message: "API key fetched successfully",
       data: {
-        byokEnable: user.isByokEnabled,
+        isByokEnabled: user.isByokEnabled,
         apiKey: user.openRouterApiKey
           ? {
               id: user.openRouterApiKey.id,
@@ -664,7 +756,15 @@ export const getApiKey = async (c: Context) => {
       },
     });
   } catch (error) {
-    logger.error({ error }, "Error in getApiKeyDetails controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getApiKey controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -677,10 +777,8 @@ export const getApiKey = async (c: Context) => {
 };
 
 /**
- * @desc createApiKey create a entry in openRouterApiKey table for user.
- * User can have one key at a time, if user is creating one we enable byokEnable.
- * @param c Hono Context
- * @returns Json response
+ * @desc Validate and store the user's OpenRouter API key, then enable the BYOK feature.
+ * Only one key is allowed per user. The key is verified with OpenRouter before being saved.
  */
 
 export const createApiKey = async (c: Context) => {
@@ -738,16 +836,22 @@ export const createApiKey = async (c: Context) => {
       const response = await fetch(url, options);
 
       if (response.status === 200) {
-        await prisma.openRouterApiKey.create({
-          data: {
-            userId,
-            key: data.key,
-          },
-        });
+        await prisma.$transaction(async (tx) => {
+          await tx.openRouterApiKey.create({
+            data: {
+              userId,
+              key: data.key,
+            },
+          });
 
-        await prisma.user.update({
-          where: { id: userId },
-          data: { isByokEnabled: true },
+          await tx.user.update({
+            where: {
+              id: userId,
+            },
+            data: {
+              isByokEnabled: true,
+            },
+          });
         });
 
         logger.info(
@@ -804,13 +908,21 @@ export const createApiKey = async (c: Context) => {
       return c.json(
         {
           success: false,
-          message: "Error while verifing openrouter API key",
+          message: "Error while verifying openrouter API key",
         },
         500,
       );
     }
   } catch (error) {
-    logger.error({ error }, "Error in createApiKey controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "createApiKey controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -823,9 +935,9 @@ export const createApiKey = async (c: Context) => {
 };
 
 /**
- * @desc deleteApiKey delete users api key and disable byokEnable
- * @param c Hono Context
- * @returns Json response
+ * @desc Delete the user's OpenRouter API key and disable the BYOK feature.
+ * Ensures both operations occur atomically so the system never ends up
+ * with BYOK enabled but no stored API key.
  */
 
 export const deleteApiKey = async (c: Context) => {
@@ -849,13 +961,21 @@ export const deleteApiKey = async (c: Context) => {
       );
     }
 
-    await prisma.openRouterApiKey.delete({
-      where: { userId },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.openRouterApiKey.delete({
+        where: {
+          userId: userId,
+        },
+      });
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { isByokEnabled: false },
+      await tx.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          isByokEnabled: false,
+        },
+      });
     });
 
     logger.info(
@@ -875,7 +995,15 @@ export const deleteApiKey = async (c: Context) => {
       200,
     );
   } catch (error) {
-    logger.error({ error }, "Error in deleteApiKey controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "deleteApiKey controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -888,9 +1016,9 @@ export const deleteApiKey = async (c: Context) => {
 };
 
 /**
- * @desc getChatHistory fetch all conversation
- * @param c Hono Context
- * @returns Json response with data
+ * @desc Fetch paginated chat history for the authenticated user for settings page.
+ * Returns the most recently updated conversations first.
+ * Each request returns 10 conversations along with pagination metadata.
  */
 
 export const getChatHistory = async (c: Context) => {
@@ -900,26 +1028,51 @@ export const getChatHistory = async (c: Context) => {
   try {
     const userId = c.get("user").id;
 
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        profile: {
-          userId,
+    const limit = 10;
+    const page = Number(c.req.query("page")) || 1;
+    const skip = (page - 1) * limit;
+
+    const [conversations, total] = await Promise.all([
+      prisma.conversation.findMany({
+        where: {
+          profile: {
+            userId,
+          },
         },
-      },
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: { updatedAt: "desc" },
-    });
+        select: {
+          id: true,
+          title: true,
+          isPinned: true,
+          createdAt: true,
+          updatedAt: true,
+          profile: {
+            select: {
+              profileName: true,
+            },
+          },
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+
+      prisma.conversation.count({
+        where: {
+          profile: {
+            userId,
+          },
+        },
+      }),
+    ]);
 
     logger.info(
       {
         ip,
         requestId,
         userId: userId,
+        page,
       },
       "Chat history fetched successfully",
     );
@@ -928,9 +1081,23 @@ export const getChatHistory = async (c: Context) => {
       success: true,
       message: "Chat history fetched successfully",
       data: conversations,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
-    logger.error({ error }, "Error in getChatHistory controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "getChatHistory controller failed",
+    );
     return c.json(
       {
         success: false,
@@ -943,11 +1110,10 @@ export const getChatHistory = async (c: Context) => {
 };
 
 /**
- * @desc deleteChatHistory delete chat history of user.
- * It accept two things id's of chat history and deleteAll flag.
- * If deleteAll then it delete all chat history. And for ids it delete given onces
- * @param c Hono Context
- * @returns Json response with data
+ * @desc Delete chat history for the authenticated user from settings page.
+ * Allows deleting either all conversations or specific ones by ID.
+ * All deletions are restricted to conversations that belong to the user
+ * across all of their profiles.
  */
 
 export const deleteChatHistory = async (c: Context) => {
@@ -957,25 +1123,9 @@ export const deleteChatHistory = async (c: Context) => {
   try {
     const userId = c.get("user").id;
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!user) {
-      return c.json(
-        {
-          success: false,
-          message: "User not found",
-        },
-        404,
-      );
-    }
-
     const body = await c.req.json<{
-      deleteAll?: boolean;
       ids?: string[];
+      deleteAll?: boolean;
     }>();
 
     if (body.deleteAll) {
@@ -993,12 +1143,12 @@ export const deleteChatHistory = async (c: Context) => {
           requestId,
           userId: userId,
         },
-        "All conversations deleted successfully",
+        "All conversations deleted successfully from chat history",
       );
 
       return c.json({
         success: true,
-        message: "All conversations deleted successfully",
+        message: "All conversations deleted successfully from chat history",
       });
     }
 
@@ -1035,7 +1185,15 @@ export const deleteChatHistory = async (c: Context) => {
       400,
     );
   } catch (error) {
-    logger.error({ error }, "Error in deleteChatHistory controller");
+    logger.error(
+      {
+        ip,
+        requestId,
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "deleteChatHistory controller failed",
+    );
     return c.json(
       {
         success: false,
